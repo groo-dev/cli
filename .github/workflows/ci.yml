@@ -1,0 +1,197 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    name: Get Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - name: Get next version
+        id: version
+        uses: groo-dev/record-release@v1
+        with:
+          token: ${{ secrets.OPS_API_TOKEN }}
+          environment: production
+          bump: patch
+          dry-run: true
+
+  release-linux:
+    name: Build Linux
+    needs: version
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu
+
+      - name: Install cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Update version in Cargo.toml
+        run: sed -i "s/^version = \".*\"/version = \"${{ needs.version.outputs.version }}\"/" Cargo.toml
+
+      - name: Build Linux targets
+        run: |
+          mkdir -p dist
+          cross build --release --target x86_64-unknown-linux-gnu
+          tar -czvf dist/gr_linux_amd64.tar.gz -C target/x86_64-unknown-linux-gnu/release gr
+          cross build --release --target aarch64-unknown-linux-gnu
+          tar -czvf dist/gr_linux_arm64.tar.gz -C target/aarch64-unknown-linux-gnu/release gr
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-binaries
+          path: dist/*.tar.gz
+
+  release-macos:
+    name: Build macOS
+    needs: version
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Update version in Cargo.toml
+        run: sed -i '' "s/^version = \".*\"/version = \"${{ needs.version.outputs.version }}\"/" Cargo.toml
+
+      - name: Build macOS targets
+        run: |
+          mkdir -p dist
+          cargo build --release --target aarch64-apple-darwin
+          tar -czvf dist/gr_darwin_arm64.tar.gz -C target/aarch64-apple-darwin/release gr
+          cargo build --release --target x86_64-apple-darwin
+          tar -czvf dist/gr_darwin_amd64.tar.gz -C target/x86_64-apple-darwin/release gr
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-binaries
+          path: dist/*.tar.gz
+
+  publish:
+    name: Publish
+    needs: [version, release-linux, release-macos]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create tag and release
+        run: |
+          VERSION=${{ needs.version.outputs.version }}
+          TAG="v$VERSION"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "$TAG"
+          git push origin "$TAG"
+
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --generate-notes \
+            dist/*.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Record release
+        uses: groo-dev/record-release@v1
+        with:
+          token: ${{ secrets.OPS_API_TOKEN }}
+          environment: production
+          version: ${{ needs.version.outputs.version }}
+
+      - name: Update Homebrew tap
+        run: |
+          VERSION=${{ needs.version.outputs.version }}
+          TAG="v$VERSION"
+
+          mkdir -p /tmp/releases
+          cd /tmp/releases
+
+          curl -sL "https://github.com/groo-dev/cli/releases/download/$TAG/gr_darwin_arm64.tar.gz" -o darwin_arm64.tar.gz
+          curl -sL "https://github.com/groo-dev/cli/releases/download/$TAG/gr_darwin_amd64.tar.gz" -o darwin_amd64.tar.gz
+          curl -sL "https://github.com/groo-dev/cli/releases/download/$TAG/gr_linux_arm64.tar.gz" -o linux_arm64.tar.gz
+          curl -sL "https://github.com/groo-dev/cli/releases/download/$TAG/gr_linux_amd64.tar.gz" -o linux_amd64.tar.gz
+
+          SHA_DARWIN_ARM64=$(sha256sum darwin_arm64.tar.gz | cut -d' ' -f1)
+          SHA_DARWIN_AMD64=$(sha256sum darwin_amd64.tar.gz | cut -d' ' -f1)
+          SHA_LINUX_ARM64=$(sha256sum linux_arm64.tar.gz | cut -d' ' -f1)
+          SHA_LINUX_AMD64=$(sha256sum linux_amd64.tar.gz | cut -d' ' -f1)
+
+          cd /tmp
+          git clone https://x-access-token:${{ secrets.HOMEBREW_TAP_TOKEN }}@github.com/groo-dev/homebrew-tap.git
+          cd homebrew-tap
+
+          mkdir -p Formula
+
+          cat > Formula/gr.rb << EOF
+          class Gr < Formula
+            desc "CLI tool for managing and running dev servers in monorepos"
+            homepage "https://github.com/groo-dev/cli"
+            version "$VERSION"
+            license "MIT"
+
+            on_macos do
+              on_arm do
+                url "https://github.com/groo-dev/cli/releases/download/$TAG/gr_darwin_arm64.tar.gz"
+                sha256 "$SHA_DARWIN_ARM64"
+              end
+              on_intel do
+                url "https://github.com/groo-dev/cli/releases/download/$TAG/gr_darwin_amd64.tar.gz"
+                sha256 "$SHA_DARWIN_AMD64"
+              end
+            end
+
+            on_linux do
+              on_arm do
+                url "https://github.com/groo-dev/cli/releases/download/$TAG/gr_linux_arm64.tar.gz"
+                sha256 "$SHA_LINUX_ARM64"
+              end
+              on_intel do
+                url "https://github.com/groo-dev/cli/releases/download/$TAG/gr_linux_amd64.tar.gz"
+                sha256 "$SHA_LINUX_AMD64"
+              end
+            end
+
+            def install
+              bin.install "gr"
+            end
+
+            test do
+              system "#{bin}/gr", "--version"
+            end
+          end
+          EOF
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/
+          git commit -m "Update gr to $VERSION"
+          git push
