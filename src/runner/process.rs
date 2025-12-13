@@ -1,10 +1,12 @@
 use anyhow::Result;
 use console::Style;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use tokio::io::{AsyncBufReadExt, BufReader};
+use std::sync::Arc;
+use tokio::fs::OpenOptions;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, Command};
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, Mutex};
 
 use super::output::{print_service_error, print_service_log};
 
@@ -25,7 +27,20 @@ pub async fn spawn_service(
     path: &Path,
     _command: &str,
     color: Style,
+    log_file: PathBuf,
 ) -> Result<ProcessHandle> {
+    // Ensure logs directory exists and truncate log file
+    if let Some(parent) = log_file.parent() {
+        tokio::fs::create_dir_all(parent).await?;
+    }
+    let file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(&log_file)
+        .await?;
+    let log_writer = Arc::new(Mutex::new(file));
+
     let mut cmd = Command::new("sh");
     cmd.arg("-c")
         .arg(format!("cd {} && npm run dev", path.display()))
@@ -44,11 +59,16 @@ pub async fn spawn_service(
     if let Some(stdout) = stdout {
         let name = name_clone.clone();
         let color = color_clone.clone();
+        let log_writer = Arc::clone(&log_writer);
         tokio::spawn(async move {
             let reader = BufReader::new(stdout);
             let mut lines = reader.lines();
             while let Ok(Some(line)) = lines.next_line().await {
                 print_service_log(&name, &line, &color);
+                // Write to log file
+                let mut file = log_writer.lock().await;
+                let _ = file.write_all(format!("[{}] {}\n", name, line).as_bytes()).await;
+                let _ = file.flush().await;
             }
         });
     }
@@ -57,11 +77,16 @@ pub async fn spawn_service(
     if let Some(stderr) = stderr {
         let name = name_clone.clone();
         let color = color_clone.clone();
+        let log_writer = Arc::clone(&log_writer);
         tokio::spawn(async move {
             let reader = BufReader::new(stderr);
             let mut lines = reader.lines();
             while let Ok(Some(line)) = lines.next_line().await {
                 print_service_error(&name, &line, &color);
+                // Write to log file
+                let mut file = log_writer.lock().await;
+                let _ = file.write_all(format!("[{}] {}\n", name, line).as_bytes()).await;
+                let _ = file.flush().await;
             }
         });
     }

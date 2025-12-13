@@ -44,6 +44,15 @@ enum Commands {
         /// Project name (defaults to current directory)
         project: Option<String>,
     },
+    /// View logs for running services
+    Logs {
+        /// Number of lines to show per service
+        #[arg(short = 'n', default_value = "10")]
+        lines: usize,
+        /// Follow log output
+        #[arg(short = 'f', long)]
+        follow: bool,
+    },
 }
 
 #[tokio::main]
@@ -63,5 +72,6 @@ async fn main() -> Result<()> {
         Commands::Status { project } => commands::status::run(project),
         Commands::Open { service } => commands::open::run(&service),
         Commands::Stop { project } => commands::stop::run(project),
+        Commands::Logs { lines, follow } => commands::logs::run(lines, follow).await,
     }
 }

@@ -3,6 +3,7 @@ use console::{style, Style, Term};
 use dialoguer::{theme::ColorfulTheme, MultiSelect};
 use tokio::sync::broadcast;
 
+use crate::config::get_service_log_file;
 use crate::discovery::{discover_services, find_git_root, get_project_name, Service};
 use crate::runner::{get_color_for_index, spawn_service, wait_for_processes, ProcessHandle};
 use crate::state::{is_port_in_use, State};
@@ -132,12 +133,14 @@ pub async fn run() -> Result<()> {
     let mut handles: Vec<ProcessHandle> = Vec::new();
     for (idx, service) in selected_services.iter().enumerate() {
         let color = get_color_for_index(idx);
+        let log_file = get_service_log_file(&service.path);
 
         match spawn_service(
             &service.name,
             &service.path,
             &service.dev_command,
             color.clone(),
+            log_file,
         )
         .await
         {
