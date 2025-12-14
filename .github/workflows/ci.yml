@@ -23,6 +23,7 @@ jobs:
           environment: production
           bump: patch
           dry-run: true
+          release-prefix: groo
 
   release-linux:
     name: Build Linux
@@ -52,10 +53,9 @@ jobs:
           tar -czvf dist/groo_linux_arm64.tar.gz -C target/aarch64-unknown-linux-gnu/release groo
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: groo-dev/record-release@v1
         with:
-          name: linux-binaries
-          path: dist/*.tar.gz
+          artifacts: dist/*.tar.gz
 
   release-macos:
     name: Build macOS
@@ -82,10 +82,9 @@ jobs:
           tar -czvf dist/groo_darwin_amd64.tar.gz -C target/x86_64-apple-darwin/release groo
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: groo-dev/record-release@v1
         with:
-          name: macos-binaries
-          path: dist/*.tar.gz
+          artifacts: dist/*.tar.gz
 
   publish:
     name: Publish
@@ -93,44 +92,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: dist
-          merge-multiple: true
-
-      - name: Create tag and release
-        run: |
-          VERSION=${{ needs.version.outputs.version }}
-          TAG="v$VERSION"
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "$TAG"
-          git push origin "$TAG"
-
-          gh release create "$TAG" \
-            --title "$TAG" \
-            --generate-notes \
-            dist/*.tar.gz
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Record release
         uses: groo-dev/record-release@v1
         with:
           token: ${{ secrets.OPS_API_TOKEN }}
-          environment: production
-          version: ${{ needs.version.outputs.version }}
 
       - name: Update Homebrew tap
         run: |
           VERSION=${{ needs.version.outputs.version }}
-          TAG="v$VERSION"
+          TAG="groo-v$VERSION"
 
           mkdir -p /tmp/releases
           cd /tmp/releases
