@@ -39,7 +39,7 @@ pub async fn run() -> Result<()> {
         println!(
             "{} No running services found. Use {} to start services.",
             style("!").yellow(),
-            style("gr dev").cyan()
+            style("groo dev").cyan()
         );
         return Ok(());
     }

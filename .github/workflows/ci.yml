@@ -47,9 +47,9 @@ jobs:
         run: |
           mkdir -p dist
           cross build --release --target x86_64-unknown-linux-gnu
-          tar -czvf dist/gr_linux_amd64.tar.gz -C target/x86_64-unknown-linux-gnu/release gr
+          tar -czvf dist/groo_linux_amd64.tar.gz -C target/x86_64-unknown-linux-gnu/release groo
           cross build --release --target aarch64-unknown-linux-gnu
-          tar -czvf dist/gr_linux_arm64.tar.gz -C target/aarch64-unknown-linux-gnu/release gr
+          tar -czvf dist/groo_linux_arm64.tar.gz -C target/aarch64-unknown-linux-gnu/release groo
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -77,9 +77,9 @@ jobs:
         run: |
           mkdir -p dist
           cargo build --release --target aarch64-apple-darwin
-          tar -czvf dist/gr_darwin_arm64.tar.gz -C target/aarch64-apple-darwin/release gr
+          tar -czvf dist/groo_darwin_arm64.tar.gz -C target/aarch64-apple-darwin/release groo
           cargo build --release --target x86_64-apple-darwin
-          tar -czvf dist/gr_darwin_amd64.tar.gz -C target/x86_64-apple-darwin/release gr
+          tar -czvf dist/groo_darwin_amd64.tar.gz -C target/x86_64-apple-darwin/release groo
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -135,10 +135,10 @@ jobs:
           mkdir -p /tmp/releases
           cd /tmp/releases
 
-          curl -sL "https://github.com/groo-dev/cli/releases/download/$TAG/gr_darwin_arm64.tar.gz" -o darwin_arm64.tar.gz
-          curl -sL "https://github.com/groo-dev/cli/releases/download/$TAG/gr_darwin_amd64.tar.gz" -o darwin_amd64.tar.gz
-          curl -sL "https://github.com/groo-dev/cli/releases/download/$TAG/gr_linux_arm64.tar.gz" -o linux_arm64.tar.gz
-          curl -sL "https://github.com/groo-dev/cli/releases/download/$TAG/gr_linux_amd64.tar.gz" -o linux_amd64.tar.gz
+          curl -sL "https://github.com/groo-dev/cli/releases/download/$TAG/groo_darwin_arm64.tar.gz" -o darwin_arm64.tar.gz
+          curl -sL "https://github.com/groo-dev/cli/releases/download/$TAG/groo_darwin_amd64.tar.gz" -o darwin_amd64.tar.gz
+          curl -sL "https://github.com/groo-dev/cli/releases/download/$TAG/groo_linux_arm64.tar.gz" -o linux_arm64.tar.gz
+          curl -sL "https://github.com/groo-dev/cli/releases/download/$TAG/groo_linux_amd64.tar.gz" -o linux_amd64.tar.gz
 
           SHA_DARWIN_ARM64=$(sha256sum darwin_arm64.tar.gz | cut -d' ' -f1)
           SHA_DARWIN_AMD64=$(sha256sum darwin_amd64.tar.gz | cut -d' ' -f1)
@@ -151,8 +151,8 @@ jobs:
 
           mkdir -p Formula
 
-          cat > Formula/gr.rb << EOF
-          class Gr < Formula
+          cat > Formula/groo.rb << EOF
+          class Groo < Formula
             desc "CLI tool for managing and running dev servers in monorepos"
             homepage "https://github.com/groo-dev/cli"
             version "$VERSION"
@@ -160,32 +160,32 @@ jobs:
 
             on_macos do
               on_arm do
-                url "https://github.com/groo-dev/cli/releases/download/$TAG/gr_darwin_arm64.tar.gz"
+                url "https://github.com/groo-dev/cli/releases/download/$TAG/groo_darwin_arm64.tar.gz"
                 sha256 "$SHA_DARWIN_ARM64"
               end
               on_intel do
-                url "https://github.com/groo-dev/cli/releases/download/$TAG/gr_darwin_amd64.tar.gz"
+                url "https://github.com/groo-dev/cli/releases/download/$TAG/groo_darwin_amd64.tar.gz"
                 sha256 "$SHA_DARWIN_AMD64"
               end
             end
 
             on_linux do
               on_arm do
-                url "https://github.com/groo-dev/cli/releases/download/$TAG/gr_linux_arm64.tar.gz"
+                url "https://github.com/groo-dev/cli/releases/download/$TAG/groo_linux_arm64.tar.gz"
                 sha256 "$SHA_LINUX_ARM64"
               end
               on_intel do
-                url "https://github.com/groo-dev/cli/releases/download/$TAG/gr_linux_amd64.tar.gz"
+                url "https://github.com/groo-dev/cli/releases/download/$TAG/groo_linux_amd64.tar.gz"
                 sha256 "$SHA_LINUX_AMD64"
               end
             end
 
             def install
-              bin.install "gr"
+              bin.install "groo"
             end
 
             test do
-              system "#{bin}/gr", "--version"
+              system "#{bin}/groo", "--version"
             end
           end
           EOF
@@ -193,5 +193,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Formula/
-          git commit -m "Update gr to $VERSION"
+          git commit -m "Update groo to $VERSION"
           git push

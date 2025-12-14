@@ -1,4 +1,4 @@
-# gr
+# groo
 
 A CLI tool for managing and running dev servers in monorepos.
 
@@ -7,7 +7,7 @@ A CLI tool for managing and running dev servers in monorepos.
 ### Homebrew (macOS/Linux)
 
 ```bash
-brew install groo-dev/tap/gr
+brew install groo-dev/tap/groo
 ```
 
 ### From Source
@@ -18,12 +18,12 @@ cargo install --git https://github.com/groo-dev/cli
 
 ## Usage
 
-Run `gr` from anywhere inside your monorepo.
+Run `groo` from anywhere inside your monorepo.
 
 ### Start dev servers
 
 ```bash
-gr dev
+groo dev
 ```
 
 Discovers all services with `dev` scripts and shows an interactive selector. Selected services run in parallel with color-coded output.
@@ -31,18 +31,18 @@ Discovers all services with `dev` scripts and shows an interactive selector. Sel
 ### View logs
 
 ```bash
-gr logs           # Show last 10 lines from running services
-gr logs -f        # Follow logs in real-time
-gr logs -n 50     # Show last 50 lines
-gr logs -n 50 -f  # Show last 50 lines, then follow
+groo logs           # Show last 10 lines from running services
+groo logs -f        # Follow logs in real-time
+groo logs -n 50     # Show last 50 lines
+groo logs -n 50 -f  # Show last 50 lines, then follow
 ```
 
-Tail logs from another terminal while `gr dev` is running. Supports viewing multiple services simultaneously with interleaved, color-coded output.
+Tail logs from another terminal while `groo dev` is running. Supports viewing multiple services simultaneously with interleaved, color-coded output.
 
 ### Restart services
 
 ```bash
-gr restart
+groo restart
 ```
 
 Select running services to restart.
@@ -50,20 +50,20 @@ Select running services to restart.
 ### Check status
 
 ```bash
-gr status         # Status of services in current project
-gr list           # List all projects with running services
+groo status         # Status of services in current project
+groo list           # List all projects with running services
 ```
 
 ### Stop services
 
 ```bash
-gr stop           # Stop all services in current project
+groo stop           # Stop all services in current project
 ```
 
 ### Open in browser
 
 ```bash
-gr open <service>
+groo open <service>
 ```
 
 Opens the service URL in your default browser.

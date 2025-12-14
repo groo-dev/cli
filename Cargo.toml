@@ -6,7 +6,7 @@ description = "A CLI tool for managing and running dev servers in monorepos"
 license = "MIT"
 
 [[bin]]
-name = "gr"
+name = "groo"
 path = "src/main.rs"
 
 [dependencies]

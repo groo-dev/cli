@@ -87,7 +87,7 @@ pub async fn run() -> Result<()> {
         println!(
             "{} All services are already running. Use {} to restart.",
             style("!").yellow(),
-            style("gr restart").cyan()
+            style("groo restart").cyan()
         );
         return Ok(());
     }

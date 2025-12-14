@@ -9,7 +9,7 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[command(name = "gr")]
+#[command(name = "groo")]
 #[command(about = "A CLI tool for managing and running dev servers in monorepos")]
 #[command(version)]
 struct Cli {
