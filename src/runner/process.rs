@@ -44,6 +44,7 @@ pub async fn spawn_service(
     let mut cmd = Command::new("sh");
     cmd.arg("-c")
         .arg(format!("cd {} && npm run dev", path.display()))
+        .stdin(Stdio::inherit())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
