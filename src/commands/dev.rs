@@ -1,8 +1,9 @@
 use anyhow::Result;
 use console::{style, Style, Term};
-use dialoguer::{theme::ColorfulTheme, MultiSelect};
+use dialoguer::{theme::ColorfulTheme, Confirm, MultiSelect};
 use tokio::sync::broadcast;
 
+use crate::commands::stop::{get_pids_by_port, kill_process};
 use crate::config::get_service_log_file;
 use crate::discovery::{discover_services, find_git_root, get_project_name, Service};
 use crate::runner::{get_color_for_index, spawn_service, wait_for_processes, ProcessHandle};
@@ -40,10 +41,60 @@ pub async fn run() -> Result<()> {
     state.save()?;
 
     // Check which services are already running (port-based detection)
-    let is_running: Vec<bool> = services
+    let mut is_running: Vec<bool> = services
         .iter()
         .map(|s| s.port.map(is_port_in_use).unwrap_or(false))
         .collect();
+
+    // Collect running services
+    let running_services: Vec<(&Service, usize)> = services
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| is_running[*i])
+        .map(|(i, s)| (s, i))
+        .collect();
+
+    // Prompt to stop if any are running
+    if !running_services.is_empty() {
+        println!("{}", style("Running services:").yellow().bold());
+        for (service, _) in &running_services {
+            let port_str = service
+                .port
+                .map(|p| format!(":{}", p))
+                .unwrap_or_default();
+            println!(
+                "  {} {}",
+                style(&service.name).cyan(),
+                style(port_str).dim()
+            );
+        }
+        println!();
+
+        let stop_them = Confirm::new()
+            .with_prompt("Stop running services?")
+            .default(true)
+            .interact()?;
+
+        if stop_them {
+            for (service, _) in &running_services {
+                if let Some(port) = service.port {
+                    for pid in get_pids_by_port(port) {
+                        kill_process(pid);
+                    }
+                    println!("  {} Stopped {}", style("✓").green(), service.name);
+                }
+            }
+            // Brief wait for ports to be released
+            std::thread::sleep(std::time::Duration::from_millis(300));
+
+            // Refresh running status
+            is_running = services
+                .iter()
+                .map(|s| s.port.map(is_port_in_use).unwrap_or(false))
+                .collect();
+            println!();
+        }
+    }
 
     // Find max name length for alignment
     let max_name_len = services.iter().map(|s| s.name.len()).max().unwrap_or(0);
@@ -82,28 +133,12 @@ pub async fn run() -> Result<()> {
         .map(|(s, &running)| s.port.is_some() && !running)
         .collect();
 
-    // Check if all services are already running
-    if is_running.iter().all(|&r| r) {
-        println!(
-            "{} All services are already running. Use {} to restart.",
-            style("!").yellow(),
-            style("groo restart").cyan()
-        );
-        return Ok(());
-    }
-
     let theme = create_theme();
     let selections = MultiSelect::with_theme(&theme)
         .with_prompt("Select services to run")
         .items(&items)
         .defaults(&defaults)
         .interact_on(&Term::stderr())?;
-
-    // Filter out already running services from selection
-    let selections: Vec<usize> = selections
-        .into_iter()
-        .filter(|&i| !is_running[i])
-        .collect();
 
     if selections.is_empty() {
         println!("{}", style("No services selected.").yellow());

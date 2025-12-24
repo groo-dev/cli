@@ -137,7 +137,7 @@ pub fn run(project: Option<String>) -> Result<()> {
 
 /// Get all PIDs of processes listening on a port using lsof
 #[cfg(unix)]
-fn get_pids_by_port(port: u16) -> Vec<u32> {
+pub fn get_pids_by_port(port: u16) -> Vec<u32> {
     use std::process::Command;
     let output = match Command::new("lsof")
         .args(["-ti", &format!(":{}", port)])
@@ -159,7 +159,7 @@ fn get_pids_by_port(port: u16) -> Vec<u32> {
 }
 
 #[cfg(not(unix))]
-fn get_pids_by_port(port: u16) -> Vec<u32> {
+pub fn get_pids_by_port(port: u16) -> Vec<u32> {
     use std::process::Command;
     let output = match Command::new("netstat")
         .args(["-ano"])
@@ -187,7 +187,7 @@ fn get_pids_by_port(port: u16) -> Vec<u32> {
 }
 
 #[cfg(unix)]
-fn kill_process(pid: u32) -> bool {
+pub fn kill_process(pid: u32) -> bool {
     use std::process::Command;
 
     // Try SIGTERM first
@@ -217,7 +217,7 @@ fn kill_process(pid: u32) -> bool {
 }
 
 #[cfg(not(unix))]
-fn kill_process(pid: u32) -> bool {
+pub fn kill_process(pid: u32) -> bool {
     use std::process::Command;
     Command::new("taskkill")
         .args(["/F", "/PID", &pid.to_string()])
