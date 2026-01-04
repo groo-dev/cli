@@ -5,11 +5,12 @@ use anyhow::Result;
 use console::{style, Style, Term};
 use dialoguer::{theme::ColorfulTheme, MultiSelect};
 use futures::future::join_all;
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
 use crate::discovery::{discover_services_by_script, find_git_root, Service};
 use crate::project_config::ProjectConfig;
-use crate::runner::get_color_for_index;
+use crate::runner::{get_color_for_index, print_service_log, print_service_error};
 
 fn create_theme() -> ColorfulTheme {
     ColorfulTheme {
@@ -184,36 +185,75 @@ fn select_services<'a>(
 async fn run_build(name: &str, path: &std::path::Path, command: &str, color: Style) -> BuildResult {
     let start = Instant::now();
 
-    // Print starting message
-    println!(
-        "{}  Building...",
-        color.apply_to(format!("[{}]", name))
-    );
-
-    // For npm scripts, prefix with "npm run"; otherwise use command directly
+    // For npm scripts, use "npm run build"; otherwise use command directly
     let full_command = if command.starts_with("cargo ") || command.starts_with("go ") {
         command.to_string()
     } else {
-        format!("npm run build")
+        "npm run build".to_string()
     };
 
-    let result = Command::new("sh")
+    let mut child = match Command::new("sh")
         .arg("-c")
         .arg(format!("cd {} && {}", path.display(), full_command))
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .output()
-        .await;
+        .spawn()
+    {
+        Ok(child) => child,
+        Err(_) => {
+            return BuildResult {
+                name: name.to_string(),
+                success: false,
+                duration: start.elapsed(),
+                exit_code: None,
+            };
+        }
+    };
 
+    let stdout = child.stdout.take();
+    let stderr = child.stderr.take();
+
+    // Spawn stdout reader
+    let name_clone = name.to_string();
+    let color_clone = color.clone();
+    let stdout_handle = tokio::spawn(async move {
+        if let Some(stdout) = stdout {
+            let reader = BufReader::new(stdout);
+            let mut lines = reader.lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                print_service_log(&name_clone, &line, &color_clone);
+            }
+        }
+    });
+
+    // Spawn stderr reader
+    let name_clone = name.to_string();
+    let color_clone = color.clone();
+    let stderr_handle = tokio::spawn(async move {
+        if let Some(stderr) = stderr {
+            let reader = BufReader::new(stderr);
+            let mut lines = reader.lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                print_service_error(&name_clone, &line, &color_clone);
+            }
+        }
+    });
+
+    // Wait for process to complete
+    let status = child.wait().await;
     let duration = start.elapsed();
 
-    match result {
-        Ok(output) => BuildResult {
+    // Wait for output readers to finish
+    let _ = stdout_handle.await;
+    let _ = stderr_handle.await;
+
+    match status {
+        Ok(status) => BuildResult {
             name: name.to_string(),
-            success: output.status.success(),
+            success: status.success(),
             duration,
-            exit_code: output.status.code(),
+            exit_code: status.code(),
         },
         Err(_) => BuildResult {
             name: name.to_string(),
