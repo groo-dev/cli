@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use walkdir::WalkDir;
 
 use super::ports::{detect_port, FrameworkType};
@@ -21,20 +20,29 @@ struct PackageJson {
     scripts: Option<std::collections::HashMap<String, String>>,
 }
 
-pub fn find_git_root() -> Result<PathBuf> {
-    let output = Command::new("git")
-        .args(["rev-parse", "--show-toplevel"])
-        .output()
-        .context("Failed to run git command")?;
+pub fn find_project_root() -> Result<PathBuf> {
+    let current_dir = std::env::current_dir().context("Failed to get current directory")?;
 
-    if !output.status.success() {
-        anyhow::bail!("Not in a git repository");
+    // Walk up looking for .groo or .git
+    let mut dir = current_dir.as_path();
+    loop {
+        // Check for .groo first
+        if dir.join(".groo").is_dir() {
+            return Ok(dir.to_path_buf());
+        }
+        // Fall back to .git
+        if dir.join(".git").exists() {
+            return Ok(dir.to_path_buf());
+        }
+
+        // Move to parent directory
+        match dir.parent() {
+            Some(parent) => dir = parent,
+            None => break,
+        }
     }
 
-    let path = String::from_utf8(output.stdout)?
-        .trim()
-        .to_string();
-    Ok(PathBuf::from(path))
+    anyhow::bail!("Not in a project (no .groo or .git directory found)")
 }
 
 pub fn get_project_name(git_root: &Path) -> String {
@@ -65,9 +73,8 @@ pub fn discover_services_by_script(git_root: &Path, script: &str) -> Result<Vec<
         let service = match file_name {
             // Skip root package.json (usually orchestrator)
             "package.json" if !is_root => parse_npm_service(git_root, service_dir, entry.path(), script)?,
-            // Allow Rust/Go at root
-            "Cargo.toml" if script == "build" => parse_rust_service(git_root, service_dir)?,
-            "go.mod" if script == "build" => parse_go_service(git_root, service_dir)?,
+            // Makefile support (at any level including root)
+            "Makefile" if script == "build" => parse_make_service(git_root, service_dir)?,
             _ => None,
         };
 
@@ -81,7 +88,7 @@ pub fn discover_services_by_script(git_root: &Path, script: &str) -> Result<Vec<
 
 fn is_ignored(path: &Path) -> bool {
     let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-    matches!(name, "node_modules" | ".git" | "dist" | "build" | ".next" | ".turbo" | "target")
+    matches!(name, "node_modules" | ".git" | "dist" | "build" | ".next" | ".turbo")
 }
 
 fn get_service_name(git_root: &Path, service_dir: &Path) -> String {
@@ -109,23 +116,12 @@ fn get_service_name(git_root: &Path, service_dir: &Path) -> String {
         })
 }
 
-fn parse_rust_service(git_root: &Path, service_dir: &Path) -> Result<Option<Service>> {
+fn parse_make_service(git_root: &Path, service_dir: &Path) -> Result<Option<Service>> {
     let name = get_service_name(git_root, service_dir);
     Ok(Some(Service {
         name,
         path: service_dir.to_path_buf(),
-        dev_command: "cargo build --release".to_string(),
-        framework: FrameworkType::Unknown,
-        port: None,
-    }))
-}
-
-fn parse_go_service(git_root: &Path, service_dir: &Path) -> Result<Option<Service>> {
-    let name = get_service_name(git_root, service_dir);
-    Ok(Some(Service {
-        name,
-        path: service_dir.to_path_buf(),
-        dev_command: "go build".to_string(),
+        dev_command: "make build".to_string(),
         framework: FrameworkType::Unknown,
         port: None,
     }))

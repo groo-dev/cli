@@ -2,7 +2,7 @@ use anyhow::Result;
 use console::{style, Style, Term};
 use dialoguer::{theme::ColorfulTheme, MultiSelect};
 
-use crate::discovery::{discover_services, find_git_root, get_project_name, Service};
+use crate::discovery::{discover_services, find_project_root, get_project_name, Service};
 use crate::state::{is_port_in_use, State};
 
 fn create_theme() -> ColorfulTheme {
@@ -22,7 +22,7 @@ fn create_theme() -> ColorfulTheme {
 }
 
 pub fn run(project: Option<String>) -> Result<()> {
-    let git_root = find_git_root()?;
+    let git_root = find_project_root()?;
     let project_name = project.unwrap_or_else(|| get_project_name(&git_root));
     let services = discover_services(&git_root)?;
 

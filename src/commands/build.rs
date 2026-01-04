@@ -8,7 +8,7 @@ use futures::future::join_all;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
-use crate::discovery::{discover_services_by_script, find_git_root, Service};
+use crate::discovery::{discover_services_by_script, find_project_root, Service};
 use crate::project_config::ProjectConfig;
 use crate::runner::{get_color_for_index, print_service_log, print_service_error};
 
@@ -36,7 +36,7 @@ struct BuildResult {
 }
 
 pub async fn run(all: bool) -> Result<()> {
-    let git_root = find_git_root()?;
+    let git_root = find_project_root()?;
     let services = discover_services_by_script(&git_root, "build")?;
 
     if services.is_empty() {
@@ -185,8 +185,8 @@ fn select_services<'a>(
 async fn run_build(name: &str, path: &std::path::Path, command: &str, color: Style) -> BuildResult {
     let start = Instant::now();
 
-    // For npm scripts, use "npm run build"; otherwise use command directly
-    let full_command = if command.starts_with("cargo ") || command.starts_with("go ") {
+    // For npm scripts, use "npm run build"; for make, use command directly
+    let full_command = if command.starts_with("make") {
         command.to_string()
     } else {
         "npm run build".to_string()

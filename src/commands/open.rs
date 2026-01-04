@@ -1,11 +1,11 @@
 use anyhow::Result;
 use console::style;
 
-use crate::discovery::{find_git_root, get_project_name};
+use crate::discovery::{find_project_root, get_project_name};
 use crate::state::State;
 
 pub fn run(service_name: &str) -> Result<()> {
-    let git_root = find_git_root()?;
+    let git_root = find_project_root()?;
     let project_name = get_project_name(&git_root);
 
     let state = State::load()?;

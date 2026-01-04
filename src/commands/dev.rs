@@ -5,7 +5,7 @@ use tokio::sync::broadcast;
 
 use crate::commands::stop::{get_pids_by_port, kill_process};
 use crate::config::get_service_log_file;
-use crate::discovery::{discover_services, find_git_root, get_project_name, Service};
+use crate::discovery::{discover_services, find_project_root, get_project_name, Service};
 use crate::project_config::ProjectConfig;
 use crate::runner::{get_color_for_index, spawn_service, wait_for_processes, ProcessHandle};
 use crate::state::{is_port_in_use, State};
@@ -27,7 +27,7 @@ fn create_theme() -> ColorfulTheme {
 }
 
 pub async fn run() -> Result<()> {
-    let git_root = find_git_root()?;
+    let git_root = find_project_root()?;
     let project_name = get_project_name(&git_root);
     let services = discover_services(&git_root)?;
 
