@@ -46,6 +46,10 @@ pub fn get_project_name(git_root: &Path) -> String {
 }
 
 pub fn discover_services(git_root: &Path) -> Result<Vec<Service>> {
+    discover_services_by_script(git_root, "dev")
+}
+
+pub fn discover_services_by_script(git_root: &Path, script: &str) -> Result<Vec<Service>> {
     let mut services = Vec::new();
 
     for entry in WalkDir::new(git_root)
@@ -63,7 +67,7 @@ pub fn discover_services(git_root: &Path) -> Result<Vec<Service>> {
                 continue;
             }
 
-            if let Some(service) = parse_service(git_root, service_dir, package_path)? {
+            if let Some(service) = parse_service(git_root, service_dir, package_path, script)? {
                 services.push(service);
             }
         }
@@ -77,27 +81,27 @@ fn is_ignored(path: &Path) -> bool {
     matches!(name, "node_modules" | ".git" | "dist" | "build" | ".next" | ".turbo")
 }
 
-fn parse_service(git_root: &Path, service_dir: &Path, package_path: &Path) -> Result<Option<Service>> {
+fn parse_service(git_root: &Path, service_dir: &Path, package_path: &Path, script: &str) -> Result<Option<Service>> {
     let content = std::fs::read_to_string(package_path)?;
     let package: PackageJson = serde_json::from_str(&content)?;
 
-    let dev_command = match package.scripts {
-        Some(scripts) => scripts.get("dev").cloned(),
+    let script_command = match package.scripts {
+        Some(scripts) => scripts.get(script).cloned(),
         None => None,
     };
 
-    let dev_command = match dev_command {
+    let script_command = match script_command {
         Some(cmd) => cmd,
         None => return Ok(None),
     };
 
     // Skip orchestrator scripts (turbo, pnpm workspace, npm workspace, etc.)
-    if is_orchestrator_script(&dev_command) {
+    if is_orchestrator_script(&script_command) {
         return Ok(None);
     }
 
-    let framework = detect_framework(&dev_command, service_dir);
-    let port = detect_port(&framework, &dev_command, service_dir);
+    let framework = detect_framework(&script_command, service_dir);
+    let port = detect_port(&framework, &script_command, service_dir);
 
     // Use relative path from git root as the service name
     let name = service_dir
@@ -116,7 +120,7 @@ fn parse_service(git_root: &Path, service_dir: &Path, package_path: &Path) -> Re
     Ok(Some(Service {
         name,
         path: service_dir.to_path_buf(),
-        dev_command,
+        dev_command: script_command,
         framework,
         port,
     }))

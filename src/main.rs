@@ -1,6 +1,7 @@
 mod commands;
 mod config;
 mod discovery;
+mod project_config;
 mod runner;
 mod state;
 
@@ -25,6 +26,12 @@ struct Cli {
 enum Commands {
     /// Start dev servers interactively
     Dev,
+    /// Build services
+    Build {
+        /// Build all services without prompting
+        #[arg(short, long)]
+        all: bool,
+    },
     /// Restart running services
     Restart,
     /// List all projects with running services
@@ -67,6 +74,7 @@ async fn main() -> Result<()> {
 
     match cli.command {
         Commands::Dev => commands::dev::run().await,
+        Commands::Build { all } => commands::build::run(all).await,
         Commands::Restart => commands::restart::run().await,
         Commands::List => commands::list::run(),
         Commands::Status { project } => commands::status::run(project),

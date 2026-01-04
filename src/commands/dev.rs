@@ -6,6 +6,7 @@ use tokio::sync::broadcast;
 use crate::commands::stop::{get_pids_by_port, kill_process};
 use crate::config::get_service_log_file;
 use crate::discovery::{discover_services, find_git_root, get_project_name, Service};
+use crate::project_config::ProjectConfig;
 use crate::runner::{get_color_for_index, spawn_service, wait_for_processes, ProcessHandle};
 use crate::state::{is_port_in_use, State};
 
@@ -126,12 +127,26 @@ pub async fn run() -> Result<()> {
         })
         .collect();
 
-    // Auto-select only services with detected ports that are not running
-    let defaults: Vec<bool> = services
-        .iter()
-        .zip(is_running.iter())
-        .map(|(s, &running)| s.port.is_some() && !running)
-        .collect();
+    // Load project config for saved selection
+    let project_config = ProjectConfig::load(&git_root).unwrap_or_default();
+
+    // Use saved selection if available, otherwise fall back to port-based defaults
+    let defaults: Vec<bool> = if !project_config.selected_services.is_empty() {
+        services
+            .iter()
+            .zip(is_running.iter())
+            .map(|(s, &running)| {
+                !running && project_config.selected_services.contains(&s.name)
+            })
+            .collect()
+    } else {
+        // Fall back: auto-select services with detected ports that are not running
+        services
+            .iter()
+            .zip(is_running.iter())
+            .map(|(s, &running)| s.port.is_some() && !running)
+            .collect()
+    };
 
     let theme = create_theme();
     let selections = MultiSelect::with_theme(&theme)
@@ -146,6 +161,17 @@ pub async fn run() -> Result<()> {
     }
 
     let selected_services: Vec<&Service> = selections.iter().map(|&i| &services[i]).collect();
+
+    // Save selection for next time
+    let mut project_config = ProjectConfig::load(&git_root).unwrap_or_default();
+    project_config.selected_services = selected_services.iter().map(|s| s.name.clone()).collect();
+    if let Err(e) = project_config.save(&git_root) {
+        eprintln!(
+            "{} Failed to save selection: {}",
+            style("⚠").yellow(),
+            e
+        );
+    }
 
     println!(
         "\n{} Starting {} service(s)...\n",
