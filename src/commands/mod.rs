@@ -1,5 +1,6 @@
 pub mod build;
 pub mod dev;
+pub mod doctor;
 pub mod list;
 pub mod logs;
 pub mod open;

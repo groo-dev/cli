@@ -60,6 +60,8 @@ enum Commands {
         #[arg(short = 'f', long)]
         follow: bool,
     },
+    /// Check project configuration for issues
+    Doctor,
 }
 
 #[tokio::main]
@@ -81,5 +83,6 @@ async fn main() -> Result<()> {
         Commands::Open { service } => commands::open::run(&service),
         Commands::Stop { project } => commands::stop::run(project),
         Commands::Logs { lines, follow } => commands::logs::run(lines, follow).await,
+        Commands::Doctor => commands::doctor::run(),
     }
 }
