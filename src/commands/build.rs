@@ -67,8 +67,9 @@ pub async fn run(all: bool) -> Result<()> {
         .map(|(idx, service)| {
             let name = service.name.clone();
             let path = service.path.clone();
+            let command = service.dev_command.clone();
             let color = get_color_for_index(idx);
-            tokio::spawn(async move { run_build(&name, &path, color).await })
+            tokio::spawn(async move { run_build(&name, &path, &command, color).await })
         })
         .collect();
 
@@ -180,7 +181,7 @@ fn select_services<'a>(
     Ok(selected)
 }
 
-async fn run_build(name: &str, path: &std::path::Path, color: Style) -> BuildResult {
+async fn run_build(name: &str, path: &std::path::Path, command: &str, color: Style) -> BuildResult {
     let start = Instant::now();
 
     // Print starting message
@@ -189,9 +190,16 @@ async fn run_build(name: &str, path: &std::path::Path, color: Style) -> BuildRes
         color.apply_to(format!("[{}]", name))
     );
 
+    // For npm scripts, prefix with "npm run"; otherwise use command directly
+    let full_command = if command.starts_with("cargo ") || command.starts_with("go ") {
+        command.to_string()
+    } else {
+        format!("npm run build")
+    };
+
     let result = Command::new("sh")
         .arg("-c")
-        .arg(format!("cd {} && npm run build", path.display()))
+        .arg(format!("cd {} && {}", path.display(), full_command))
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

@@ -58,18 +58,21 @@ pub fn discover_services_by_script(git_root: &Path, script: &str) -> Result<Vec<
         .filter_entry(|e| !is_ignored(e.path()))
     {
         let entry = entry?;
-        if entry.file_name() == "package.json" {
-            let package_path = entry.path();
-            let service_dir = package_path.parent().unwrap();
+        let file_name = entry.file_name().to_str().unwrap_or("");
+        let service_dir = entry.path().parent().unwrap();
+        let is_root = service_dir == git_root;
 
-            // Skip root package.json
-            if service_dir == git_root {
-                continue;
-            }
+        let service = match file_name {
+            // Skip root package.json (usually orchestrator)
+            "package.json" if !is_root => parse_npm_service(git_root, service_dir, entry.path(), script)?,
+            // Allow Rust/Go at root
+            "Cargo.toml" if script == "build" => parse_rust_service(git_root, service_dir)?,
+            "go.mod" if script == "build" => parse_go_service(git_root, service_dir)?,
+            _ => None,
+        };
 
-            if let Some(service) = parse_service(git_root, service_dir, package_path, script)? {
-                services.push(service);
-            }
+        if let Some(s) = service {
+            services.push(s);
         }
     }
 
@@ -78,10 +81,57 @@ pub fn discover_services_by_script(git_root: &Path, script: &str) -> Result<Vec<
 
 fn is_ignored(path: &Path) -> bool {
     let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-    matches!(name, "node_modules" | ".git" | "dist" | "build" | ".next" | ".turbo")
+    matches!(name, "node_modules" | ".git" | "dist" | "build" | ".next" | ".turbo" | "target")
 }
 
-fn parse_service(git_root: &Path, service_dir: &Path, package_path: &Path, script: &str) -> Result<Option<Service>> {
+fn get_service_name(git_root: &Path, service_dir: &Path) -> String {
+    if service_dir == git_root {
+        // Use project directory name for root
+        return git_root
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("root")
+            .to_string();
+    }
+
+    service_dir
+        .strip_prefix(git_root)
+        .ok()
+        .and_then(|p| p.to_str())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.replace('/', ":"))
+        .unwrap_or_else(|| {
+            service_dir
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("unknown")
+                .to_string()
+        })
+}
+
+fn parse_rust_service(git_root: &Path, service_dir: &Path) -> Result<Option<Service>> {
+    let name = get_service_name(git_root, service_dir);
+    Ok(Some(Service {
+        name,
+        path: service_dir.to_path_buf(),
+        dev_command: "cargo build --release".to_string(),
+        framework: FrameworkType::Unknown,
+        port: None,
+    }))
+}
+
+fn parse_go_service(git_root: &Path, service_dir: &Path) -> Result<Option<Service>> {
+    let name = get_service_name(git_root, service_dir);
+    Ok(Some(Service {
+        name,
+        path: service_dir.to_path_buf(),
+        dev_command: "go build".to_string(),
+        framework: FrameworkType::Unknown,
+        port: None,
+    }))
+}
+
+fn parse_npm_service(git_root: &Path, service_dir: &Path, package_path: &Path, script: &str) -> Result<Option<Service>> {
     let content = std::fs::read_to_string(package_path)?;
     let package: PackageJson = serde_json::from_str(&content)?;
 
@@ -102,20 +152,7 @@ fn parse_service(git_root: &Path, service_dir: &Path, package_path: &Path, scrip
 
     let framework = detect_framework(&script_command, service_dir);
     let port = detect_port(&framework, &script_command, service_dir);
-
-    // Use relative path from git root as the service name
-    let name = service_dir
-        .strip_prefix(git_root)
-        .ok()
-        .and_then(|p| p.to_str())
-        .map(|s| s.replace('/', ":"))
-        .unwrap_or_else(|| {
-            service_dir
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("unknown")
-                .to_string()
-        });
+    let name = get_service_name(git_root, service_dir);
 
     Ok(Some(Service {
         name,
