@@ -30,7 +30,7 @@ impl PadClient {
         // Connect to WebSocket
         let request = http::Request::builder()
             .uri(PAD_WS_URL)
-            .header("Authorization", format!("Bearer {}", self.token))
+            .header("Cookie", format!("session={}", self.token))
             .header("Host", "pad.groo.dev")
             .header("Upgrade", "websocket")
             .header("Connection", "Upgrade")
@@ -137,7 +137,7 @@ impl PadClient {
 
         let resp = client
             .post(format!("{}/files", PAD_API_URL))
-            .bearer_auth(&self.token)
+            .header("Cookie", format!("session={}", self.token))
             .multipart(form)
             .send()
             .await?;
@@ -167,7 +167,7 @@ impl PadClient {
         // Connect to get state
         let request = http::Request::builder()
             .uri(PAD_WS_URL)
-            .header("Authorization", format!("Bearer {}", self.token))
+            .header("Cookie", format!("session={}", self.token))
             .header("Host", "pad.groo.dev")
             .header("Upgrade", "websocket")
             .header("Connection", "Upgrade")
