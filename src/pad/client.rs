@@ -72,11 +72,10 @@ impl PadClient {
         let key = derive_key(password, &salt);
 
         // Verify password
-        if let Some(ref test) = state.encryption_test {
-            if !verify_key(test, &key) {
+        if let Some(ref test) = state.encryption_test
+            && !verify_key(test, &key) {
                 return Err(anyhow!("Incorrect encryption password"));
             }
-        }
 
         // Encrypt text
         let encrypted_text = if let Some(t) = text {
@@ -99,8 +98,8 @@ impl PadClient {
             .await?;
 
         // Wait for confirmation
-        if let Some(Ok(confirm)) = ws.next().await {
-            if let Message::Text(text) = confirm {
+        if let Some(Ok(confirm)) = ws.next().await
+            && let Message::Text(text) = confirm {
                 let response: ServerMessage = serde_json::from_str(&text)?;
                 match response {
                     ServerMessage::ListAdded { .. } => {}
@@ -110,7 +109,6 @@ impl PadClient {
                     _ => {}
                 }
             }
-        }
 
         // Close connection
         ws.close(None).await?;
@@ -203,11 +201,10 @@ impl PadClient {
         let salt = BASE64.decode(&salt_b64)?;
         let key = derive_key(password, &salt);
 
-        if let Some(ref test) = state.encryption_test {
-            if !verify_key(test, &key) {
+        if let Some(ref test) = state.encryption_test
+            && !verify_key(test, &key) {
                 return Err(anyhow!("Incorrect encryption password"));
             }
-        }
 
         Ok(key)
     }

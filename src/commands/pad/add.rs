@@ -85,11 +85,10 @@ pub async fn run(text: Option<String>, files: Vec<PathBuf>) -> Result<()> {
 
 fn get_text_content(text_arg: Option<String>) -> Result<Option<String>> {
     // If text provided as argument, use it
-    if let Some(t) = text_arg {
-        if !t.is_empty() {
+    if let Some(t) = text_arg
+        && !t.is_empty() {
             return Ok(Some(t));
         }
-    }
 
     // Check if stdin has data (piped input)
     if !atty::is(atty::Stream::Stdin) {

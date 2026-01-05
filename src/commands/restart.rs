@@ -91,8 +91,8 @@ pub async fn run() -> Result<()> {
     );
 
     for service in &selected_services {
-        if let Some(port) = service.port {
-            if let Some(pid) = get_pid_by_port(port) {
+        if let Some(port) = service.port
+            && let Some(pid) = get_pid_by_port(port) {
                 if kill_process(pid) {
                     println!(
                         "  {} Stopped {}",
@@ -107,7 +107,6 @@ pub async fn run() -> Result<()> {
                     );
                 }
             }
-        }
     }
 
     // Clean state

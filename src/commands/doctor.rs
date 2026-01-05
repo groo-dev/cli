@@ -121,7 +121,7 @@ pub fn run() -> Result<()> {
                 if is_server_framework {
                     port_to_services
                         .entry(*p)
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push(name.clone());
                 }
             }

@@ -129,13 +129,11 @@ fn show_last_lines(name: &str, log_file: &PathBuf, color: &Style, lines: usize) 
 
     // Read all lines and keep last N
     let mut last_lines: VecDeque<String> = VecDeque::with_capacity(lines);
-    for line in reader.lines() {
-        if let Ok(line) = line {
-            if last_lines.len() >= lines {
-                last_lines.pop_front();
-            }
-            last_lines.push_back(line);
+    for line in reader.lines().flatten() {
+        if last_lines.len() >= lines {
+            last_lines.pop_front();
         }
+        last_lines.push_back(line);
     }
 
     // Print each line with colored prefix

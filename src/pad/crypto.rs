@@ -30,7 +30,7 @@ pub fn encrypt(plaintext: &str, key: &[u8; KEY_LENGTH]) -> Result<EncryptedPaylo
 
     Ok(EncryptedPayload {
         ciphertext: BASE64.encode(&ciphertext),
-        iv: BASE64.encode(&iv),
+        iv: BASE64.encode(iv),
         version: 1,
     })
 }
