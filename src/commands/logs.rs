@@ -129,7 +129,7 @@ fn show_last_lines(name: &str, log_file: &PathBuf, color: &Style, lines: usize) 
 
     // Read all lines and keep last N
     let mut last_lines: VecDeque<String> = VecDeque::with_capacity(lines);
-    for line in reader.lines().flatten() {
+    for line in reader.lines().map_while(Result::ok) {
         if last_lines.len() >= lines {
             last_lines.pop_front();
         }
@@ -222,21 +222,19 @@ async fn tail_log_file(
                     file.seek(SeekFrom::Start(pos))?;
 
                     let reader = std::io::BufReader::new(file);
-                    for line in reader.lines() {
-                        if let Ok(line) = line {
-                            let prefix = color.apply_to(format!("[{}]", name));
-                            // Remove [service] prefix from stored line if present
-                            let message = if line.starts_with('[') {
-                                if let Some(idx) = line.find(']') {
-                                    line[idx + 1..].trim_start().to_string()
-                                } else {
-                                    line
-                                }
+                    for line in reader.lines().map_while(Result::ok) {
+                        let prefix = color.apply_to(format!("[{}]", name));
+                        // Remove [service] prefix from stored line if present
+                        let message = if line.starts_with('[') {
+                            if let Some(idx) = line.find(']') {
+                                line[idx + 1..].trim_start().to_string()
                             } else {
                                 line
-                            };
-                            println!("{} {}", prefix, message);
-                        }
+                            }
+                        } else {
+                            line
+                        };
+                        println!("{} {}", prefix, message);
                     }
                     pos = new_len;
                 } else if new_len < pos {

@@ -61,15 +61,14 @@ async fn run_app(
         terminal.draw(|f| ui::render(f, app))?;
 
         // Poll for events with timeout for async operations
-        if event::poll(Duration::from_millis(100))? {
-            if let Event::Key(key) = event::read()? {
-                if key.kind == KeyEventKind::Press {
-                    match events::handle_key(app, key.code, client).await {
-                        Ok(should_quit) if should_quit => break,
-                        Err(e) => app.set_error(&e.to_string()),
-                        _ => {}
-                    }
-                }
+        if event::poll(Duration::from_millis(100))?
+            && let Event::Key(key) = event::read()?
+            && key.kind == KeyEventKind::Press
+        {
+            match events::handle_key(app, key.code, client).await {
+                Ok(should_quit) if should_quit => break,
+                Err(e) => app.set_error(&e.to_string()),
+                _ => {}
             }
         }
 

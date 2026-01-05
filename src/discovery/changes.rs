@@ -63,10 +63,10 @@ pub fn get_changed_files_for_context(root: &Path, context: ChangeContext) -> Res
                 .current_dir(root)
                 .output();
 
-            if let Ok(fallback_output) = fallback {
-                if fallback_output.status.success() {
-                    return Ok(parse_file_list(root, &fallback_output.stdout));
-                }
+            if let Ok(fallback_output) = fallback
+                && fallback_output.status.success()
+            {
+                return Ok(parse_file_list(root, &fallback_output.stdout));
             }
 
             // Try origin/master as last resort
@@ -75,10 +75,10 @@ pub fn get_changed_files_for_context(root: &Path, context: ChangeContext) -> Res
                 .current_dir(root)
                 .output();
 
-            if let Ok(fallback_output) = fallback {
-                if fallback_output.status.success() {
-                    return Ok(parse_file_list(root, &fallback_output.stdout));
-                }
+            if let Ok(fallback_output) = fallback
+                && fallback_output.status.success()
+            {
+                return Ok(parse_file_list(root, &fallback_output.stdout));
             }
         }
 

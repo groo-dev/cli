@@ -74,7 +74,7 @@ pub fn discover_services_by_script(git_root: &Path, script: &str) -> Result<Vec<
             // Skip root package.json (usually orchestrator)
             "package.json" if !is_root => parse_npm_service(git_root, service_dir, entry.path(), script)?,
             // Makefile support (at any level including root)
-            "Makefile" if script == "build" => parse_make_service(git_root, service_dir)?,
+            "Makefile" => parse_make_service(git_root, service_dir, entry.path(), script)?,
             _ => None,
         };
 
@@ -116,12 +116,21 @@ fn get_service_name(git_root: &Path, service_dir: &Path) -> String {
         })
 }
 
-fn parse_make_service(git_root: &Path, service_dir: &Path) -> Result<Option<Service>> {
+fn parse_make_service(git_root: &Path, service_dir: &Path, makefile_path: &Path, script: &str) -> Result<Option<Service>> {
+    // Check if Makefile has the target we're looking for
+    let content = std::fs::read_to_string(makefile_path)?;
+
+    // Look for target definition (e.g., "build:" or "lint:")
+    let target_pattern = format!("{}:", script);
+    if !content.lines().any(|line| line.starts_with(&target_pattern)) {
+        return Ok(None);
+    }
+
     let name = get_service_name(git_root, service_dir);
     Ok(Some(Service {
         name,
         path: service_dir.to_path_buf(),
-        dev_command: "make build".to_string(),
+        dev_command: format!("make {}", script),
         framework: FrameworkType::Unknown,
         port: None,
     }))

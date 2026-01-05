@@ -28,21 +28,26 @@ fn detect_nextjs_port(dev_command: &str) -> Option<u16> {
 }
 
 fn detect_vite_port(service_dir: &Path) -> Option<u16> {
+    use std::sync::LazyLock;
+    static PORT_RE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"port\s*:\s*(\d+)").unwrap());
+
     // Try vite.config.ts first, then vite.config.js
     let config_files = ["vite.config.ts", "vite.config.js", "vite.config.mts", "vite.config.mjs"];
 
     for config_file in &config_files {
         let config_path = service_dir.join(config_file);
         if config_path.exists()
-            && let Ok(content) = std::fs::read_to_string(&config_path) {
-                // Look for server.port or port: in the config
-                let re = Regex::new(r"port\s*:\s*(\d+)").ok()?;
-                if let Some(cap) = re.captures(&content)
-                    && let Some(m) = cap.get(1)
-                        && let Ok(port) = m.as_str().parse() {
-                            return Some(port);
-                        }
+            && let Ok(content) = std::fs::read_to_string(&config_path)
+        {
+            // Look for server.port or port: in the config
+            if let Some(cap) = PORT_RE.captures(&content)
+                && let Some(m) = cap.get(1)
+                && let Ok(port) = m.as_str().parse()
+            {
+                return Some(port);
             }
+        }
     }
 
     Some(5173) // Vite default

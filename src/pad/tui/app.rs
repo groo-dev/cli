@@ -163,10 +163,10 @@ impl App {
     }
 
     pub fn clear_status_if_expired(&mut self) {
-        if let Some((_, _, created)) = &self.status_message {
-            if created.elapsed().as_secs() >= 3 {
-                self.status_message = None;
-            }
+        if let Some((_, _, created)) = &self.status_message
+            && created.elapsed().as_secs() >= 3
+        {
+            self.status_message = None;
         }
     }
 

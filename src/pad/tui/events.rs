@@ -111,10 +111,10 @@ async fn handle_picker_key(app: &mut App, key: KeyCode, client: &PadClient) -> R
 
         KeyCode::Enter => {
             // Navigate into selected directory
-            if let AppMode::DirectoryPicker(ref mut picker) = app.mode {
-                if let Err(e) = picker.navigate_into() {
-                    app.set_error(&format!("Failed to open directory: {}", e));
-                }
+            if let AppMode::DirectoryPicker(ref mut picker) = app.mode
+                && let Err(e) = picker.navigate_into()
+            {
+                app.set_error(&format!("Failed to open directory: {}", e));
             }
         }
 
@@ -134,12 +134,12 @@ async fn handle_picker_key(app: &mut App, key: KeyCode, client: &PadClient) -> R
 
         KeyCode::Char('~') => {
             // Go to home directory
-            if let AppMode::DirectoryPicker(ref mut picker) = app.mode {
-                if let Some(home) = dirs::home_dir() {
-                    picker.current_dir = home;
-                    if let Err(e) = picker.refresh() {
-                        app.set_error(&format!("Failed to open home directory: {}", e));
-                    }
+            if let AppMode::DirectoryPicker(ref mut picker) = app.mode
+                && let Some(home) = dirs::home_dir()
+            {
+                picker.current_dir = home;
+                if let Err(e) = picker.refresh() {
+                    app.set_error(&format!("Failed to open home directory: {}", e));
                 }
             }
         }
@@ -184,11 +184,11 @@ async fn do_download(app: &mut App, client: &PadClient, download_dir: &PathBuf) 
     }
 
     // Ensure directory exists
-    if !download_dir.exists() {
-        if let Err(e) = std::fs::create_dir_all(download_dir) {
-            app.set_error(&format!("Failed to create directory: {}", e));
-            return Ok(());
-        }
+    if !download_dir.exists()
+        && let Err(e) = std::fs::create_dir_all(download_dir)
+    {
+        app.set_error(&format!("Failed to create directory: {}", e));
+        return Ok(());
     }
 
     // Download each file
