@@ -42,6 +42,8 @@ pub enum ServerMessage {
     Sync { state: UserState },
     #[serde(rename = "list:added")]
     ListAdded { item: ListItem },
+    #[serde(rename = "list:deleted")]
+    ListDeleted { id: String },
     #[serde(rename = "error")]
     Error { message: String },
 }
@@ -51,6 +53,8 @@ pub enum ServerMessage {
 pub enum ClientMessage {
     #[serde(rename = "list:add")]
     ListAdd { item: ListItem },
+    #[serde(rename = "list:delete")]
+    ListDelete { id: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

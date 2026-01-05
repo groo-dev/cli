@@ -100,6 +100,8 @@ enum PadCommands {
         #[arg(short = 'f', long = "file", action = clap::ArgAction::Append)]
         files: Vec<PathBuf>,
     },
+    /// View and manage your pad items
+    List,
 }
 
 #[tokio::main]
@@ -129,6 +131,7 @@ async fn main() -> Result<()> {
         },
         Commands::Pad { command } => match command {
             PadCommands::Add { text, files } => commands::pad::add::run(text, files).await,
+            PadCommands::List => commands::pad::list::run().await,
         },
     }
 }

@@ -67,3 +67,17 @@ pub fn encrypt_file(data: &[u8], key: &[u8; KEY_LENGTH]) -> Result<Vec<u8>> {
     result.extend_from_slice(&ciphertext);
     Ok(result)
 }
+
+pub fn decrypt_file(encrypted_data: &[u8], key: &[u8; KEY_LENGTH]) -> Result<Vec<u8>> {
+    if encrypted_data.len() < IV_LENGTH {
+        return Err(anyhow!("Invalid encrypted data: too short"));
+    }
+
+    let (iv, ciphertext) = encrypted_data.split_at(IV_LENGTH);
+    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
+    let nonce = Nonce::from_slice(iv);
+
+    cipher
+        .decrypt(nonce, ciphertext)
+        .map_err(|_| anyhow!("File decryption failed"))
+}

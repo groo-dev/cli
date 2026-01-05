@@ -4,7 +4,7 @@ use futures::{SinkExt, StreamExt};
 use rand::Rng;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
-use super::crypto::{derive_key, encrypt, encrypt_file, verify_key};
+use super::crypto::{decrypt_file, derive_key, encrypt, encrypt_file, verify_key};
 use super::types::{
     ClientMessage, FileAttachment, FileUploadResponse, ListItem, ServerMessage, UserState,
 };
@@ -164,7 +164,12 @@ impl PadClient {
     }
 
     pub async fn get_encryption_salt(&self, password: &str) -> Result<[u8; 32]> {
-        // Connect to get state
+        let (_, key) = self.connect_and_sync(password).await?;
+        Ok(key)
+    }
+
+    /// Connect to WebSocket, get initial state, and derive encryption key
+    pub async fn connect_and_sync(&self, password: &str) -> Result<(UserState, [u8; 32])> {
         let request = http::Request::builder()
             .uri(PAD_WS_URL)
             .header("Cookie", format!("session={}", self.token))
@@ -197,6 +202,7 @@ impl PadClient {
 
         let salt_b64 = state
             .encryption_salt
+            .clone()
             .ok_or_else(|| anyhow!("Encryption not set up"))?;
         let salt = BASE64.decode(&salt_b64)?;
         let key = derive_key(password, &salt);
@@ -206,7 +212,60 @@ impl PadClient {
                 return Err(anyhow!("Incorrect encryption password"));
             }
 
-        Ok(key)
+        Ok((state, key))
+    }
+
+    /// Fetch current state without password verification (for refresh when key is already known)
+    pub async fn fetch_state(&self) -> Result<UserState> {
+        let request = http::Request::builder()
+            .uri(PAD_WS_URL)
+            .header("Cookie", format!("session={}", self.token))
+            .header("Host", "pad.groo.dev")
+            .header("Upgrade", "websocket")
+            .header("Connection", "Upgrade")
+            .header("Sec-WebSocket-Version", "13")
+            .header("Sec-WebSocket-Key", generate_ws_key())
+            .body(())?;
+
+        let (mut ws, _) = connect_async(request).await?;
+
+        let sync_msg = ws
+            .next()
+            .await
+            .ok_or_else(|| anyhow!("Connection closed"))??;
+
+        let state: UserState = match sync_msg {
+            Message::Text(text) => {
+                let msg: ServerMessage = serde_json::from_str(&text)?;
+                match msg {
+                    ServerMessage::Sync { state } => state,
+                    _ => return Err(anyhow!("Expected sync message")),
+                }
+            }
+            _ => return Err(anyhow!("Expected text message")),
+        };
+
+        ws.close(None).await?;
+        Ok(state)
+    }
+
+    /// Download and decrypt a file from R2 storage
+    pub async fn download_file(&self, r2_key: &str, key: &[u8; 32]) -> Result<Vec<u8>> {
+        let client = reqwest::Client::new();
+        let resp = client
+            .get(format!("{}/files/{}", PAD_API_URL, r2_key))
+            .header("Cookie", format!("session={}", self.token))
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let text = resp.text().await.unwrap_or_default();
+            return Err(anyhow!("Download failed ({}): {}", status, text));
+        }
+
+        let encrypted_data = resp.bytes().await?;
+        decrypt_file(&encrypted_data, key)
     }
 }
 
