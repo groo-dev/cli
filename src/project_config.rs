@@ -11,6 +11,8 @@ pub struct ProjectConfig {
     pub selected_services: Vec<String>,
     #[serde(default)]
     pub selected_build_services: Vec<String>,
+    #[serde(default)]
+    pub selected_lint_services: Vec<String>,
 }
 
 impl ProjectConfig {

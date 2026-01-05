@@ -33,6 +33,18 @@ enum Commands {
         /// Build all services without prompting
         #[arg(short, long)]
         all: bool,
+        /// Build only services with changes
+        #[arg(long)]
+        changed: bool,
+    },
+    /// Lint services
+    Lint {
+        /// Lint all services without prompting
+        #[arg(short, long)]
+        all: bool,
+        /// Lint only services with changes
+        #[arg(long)]
+        changed: bool,
     },
     /// Restart running services
     Restart,
@@ -116,7 +128,8 @@ async fn main() -> Result<()> {
 
     match cli.command {
         Commands::Dev => commands::dev::run().await,
-        Commands::Build { all } => commands::build::run(all).await,
+        Commands::Build { all, changed } => commands::build::run(all, changed).await,
+        Commands::Lint { all, changed } => commands::lint::run(all, changed).await,
         Commands::Restart => commands::restart::run().await,
         Commands::List => commands::list::run(),
         Commands::Status { project } => commands::status::run(project),

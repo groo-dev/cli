@@ -1,10 +1,23 @@
 use anyhow::Result;
-use console::style;
+use console::{style, Term};
+use dialoguer::Confirm;
 use std::collections::{HashMap, HashSet};
+use std::fs;
+use std::path::PathBuf;
 
 use crate::discovery::ports::FrameworkType;
 use crate::discovery::{discover_services, discover_services_by_script, find_project_root};
 use crate::project_config::ProjectConfig;
+
+const PRE_COMMIT_HOOK: &str = r#"#!/bin/sh
+# Groo pre-commit hook - lint services with staged changes
+groo lint --changed
+"#;
+
+const PRE_PUSH_HOOK: &str = r#"#!/bin/sh
+# Groo pre-push hook - build services with unpushed commits
+groo build --changed
+"#;
 
 pub fn run() -> Result<()> {
     let mut has_errors = false;
@@ -35,25 +48,40 @@ pub fn run() -> Result<()> {
         }
     };
 
+    // Collect fixable issues
+    let mut fixable_hooks: Vec<(PathBuf, &'static str, &'static str)> = Vec::new();
+
     // 2. Discover services
     let dev_services = discover_services(&project_root).unwrap_or_default();
     let build_services = discover_services_by_script(&project_root, "build").unwrap_or_default();
+    let lint_services = discover_services_by_script(&project_root, "lint").unwrap_or_default();
 
-    // Combine all unique services: (port, has_dev, has_build, framework)
-    let mut all_services: HashMap<String, (Option<u16>, bool, bool, FrameworkType)> = HashMap::new();
+    // Combine all unique services: (port, has_dev, has_build, has_lint, framework)
+    let mut all_services: HashMap<String, (Option<u16>, bool, bool, bool, FrameworkType)> =
+        HashMap::new();
 
     for service in &dev_services {
         all_services
             .entry(service.name.clone())
-            .or_insert((service.port, false, false, service.framework.clone()))
+            .or_insert((service.port, false, false, false, service.framework.clone()))
             .1 = true; // has dev
     }
 
     for service in &build_services {
         let entry = all_services
             .entry(service.name.clone())
-            .or_insert((service.port, false, false, FrameworkType::Unknown));
+            .or_insert((service.port, false, false, false, FrameworkType::Unknown));
         entry.2 = true; // has build
+        if entry.0.is_none() {
+            entry.0 = service.port;
+        }
+    }
+
+    for service in &lint_services {
+        let entry = all_services
+            .entry(service.name.clone())
+            .or_insert((service.port, false, false, false, FrameworkType::Unknown));
+        entry.3 = true; // has lint
         if entry.0.is_none() {
             entry.0 = service.port;
         }
@@ -74,11 +102,20 @@ pub fn run() -> Result<()> {
         );
     }
 
-    // 4. Check each service has dev or build
+    // 4. Check each service has dev or build, and lint+build scripts
     let mut services_without_commands = Vec::new();
-    for (name, (_, has_dev, has_build, _)) in &all_services {
+    let mut services_missing_lint = Vec::new();
+    let mut services_missing_build = Vec::new();
+
+    for (name, (_, has_dev, has_build, has_lint, _)) in &all_services {
         if !has_dev && !has_build {
             services_without_commands.push(name.clone());
+        }
+        if !has_lint {
+            services_missing_lint.push(name.clone());
+        }
+        if !has_build {
+            services_missing_build.push(name.clone());
         }
     }
 
@@ -93,12 +130,40 @@ pub fn run() -> Result<()> {
         has_errors = true;
     }
 
+    // Report missing lint scripts
+    if services_missing_lint.is_empty() {
+        println!("{} All services have lint scripts", style("✓").green());
+    } else {
+        for name in &services_missing_lint {
+            println!(
+                "{} Service '{}' missing 'lint' script",
+                style("✗").red(),
+                name
+            );
+        }
+        has_errors = true;
+    }
+
+    // Report missing build scripts
+    if services_missing_build.is_empty() {
+        println!("{} All services have build scripts", style("✓").green());
+    } else {
+        for name in &services_missing_build {
+            println!(
+                "{} Service '{}' missing 'build' script",
+                style("✗").red(),
+                name
+            );
+        }
+        has_errors = true;
+    }
+
     // 5. Check ports (only for server frameworks with dev command)
     let mut port_issues = Vec::new();
     let mut missing_ports = Vec::new();
     let mut port_to_services: HashMap<u16, Vec<String>> = HashMap::new();
 
-    for (name, (port, has_dev, _, framework)) in &all_services {
+    for (name, (port, has_dev, _, _, framework)) in &all_services {
         // Only check ports for dev services (build-only services don't need ports)
         if !has_dev {
             continue;
@@ -204,14 +269,35 @@ pub fn run() -> Result<()> {
         }
     }
 
-    // 7. Print services table
+    // 7. Check git hooks
+    let hooks_dir = project_root.join(".git/hooks");
+    let pre_commit_path = hooks_dir.join("pre-commit");
+    let pre_push_path = hooks_dir.join("pre-push");
+
+    if pre_commit_path.exists() {
+        println!("{} pre-commit hook exists", style("✓").green());
+    } else {
+        println!("{} Missing pre-commit hook", style("✗").red());
+        has_errors = true;
+        fixable_hooks.push((pre_commit_path.clone(), PRE_COMMIT_HOOK, "pre-commit"));
+    }
+
+    if pre_push_path.exists() {
+        println!("{} pre-push hook exists", style("✓").green());
+    } else {
+        println!("{} Missing pre-push hook", style("✗").red());
+        has_errors = true;
+        fixable_hooks.push((pre_push_path.clone(), PRE_PUSH_HOOK, "pre-push"));
+    }
+
+    // 8. Print services table
     if !all_services.is_empty() {
         println!();
         println!("{}", style("Services:").bold());
 
         let max_name_len = all_services.keys().map(|s| s.len()).max().unwrap_or(0);
 
-        for (name, (port, has_dev, has_build, _)) in &all_services {
+        for (name, (port, has_dev, has_build, has_lint, _)) in &all_services {
             let port_str = port
                 .map(|p| p.to_string())
                 .unwrap_or_else(|| "-".to_string());
@@ -219,6 +305,7 @@ pub fn run() -> Result<()> {
             let commands: Vec<&str> = [
                 if *has_dev { Some("dev") } else { None },
                 if *has_build { Some("build") } else { None },
+                if *has_lint { Some("lint") } else { None },
             ]
             .into_iter()
             .flatten()
@@ -234,6 +321,38 @@ pub fn run() -> Result<()> {
         }
     }
 
+    // Offer to fix hooks if any are missing
+    if !fixable_hooks.is_empty() {
+        println!();
+        if Confirm::new()
+            .with_prompt("Fix missing hooks?")
+            .default(true)
+            .interact_on(&Term::stderr())?
+        {
+            for (path, content, name) in &fixable_hooks {
+                match create_hook(path, content) {
+                    Ok(_) => println!("  {} Created {} hook", style("✓").green(), name),
+                    Err(e) => println!(
+                        "  {} Failed to create {} hook: {}",
+                        style("✗").red(),
+                        name,
+                        e
+                    ),
+                }
+            }
+            println!();
+            println!("{}", style("Hooks created!").green());
+            // Re-evaluate has_errors since we may have fixed them
+            has_errors = false;
+            for (path, _, _) in &fixable_hooks {
+                if !path.exists() {
+                    has_errors = true;
+                    break;
+                }
+            }
+        }
+    }
+
     // Summary
     println!();
     if has_errors {
@@ -243,6 +362,23 @@ pub fn run() -> Result<()> {
         println!("{}", style("All checks passed with warnings.").yellow());
     } else {
         println!("{}", style("All checks passed.").green());
+    }
+
+    Ok(())
+}
+
+fn create_hook(path: &PathBuf, content: &str) -> Result<()> {
+    // Ensure hooks directory exists
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(path, content)?;
+
+    // Make executable on Unix
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(path, fs::Permissions::from_mode(0o755))?;
     }
 
     Ok(())

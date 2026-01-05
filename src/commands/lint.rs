@@ -13,7 +13,7 @@ use crate::discovery::{
     get_changed_files, Service,
 };
 use crate::project_config::ProjectConfig;
-use crate::runner::{get_color_for_index, print_service_log, print_service_error};
+use crate::runner::{get_color_for_index, print_service_error, print_service_log};
 
 fn create_theme() -> ColorfulTheme {
     ColorfulTheme {
@@ -31,7 +31,7 @@ fn create_theme() -> ColorfulTheme {
     }
 }
 
-struct BuildResult {
+struct LintResult {
     name: String,
     success: bool,
     duration: std::time::Duration,
@@ -40,10 +40,10 @@ struct BuildResult {
 
 pub async fn run(all: bool, changed: bool) -> Result<()> {
     let git_root = find_project_root()?;
-    let services = discover_services_by_script(&git_root, "build")?;
+    let services = discover_services_by_script(&git_root, "lint")?;
 
     if services.is_empty() {
-        println!("{}", style("No services with build scripts found.").yellow());
+        println!("{}", style("No services with lint scripts found.").yellow());
         return Ok(());
     }
 
@@ -71,12 +71,12 @@ pub async fn run(all: bool, changed: bool) -> Result<()> {
     }
 
     println!(
-        "\n{} Building {} service(s)...\n",
+        "\n{} Linting {} service(s)...\n",
         style("→").green().bold(),
         selected_services.len()
     );
 
-    // Spawn all builds in parallel
+    // Spawn all lints in parallel
     let handles: Vec<_> = selected_services
         .iter()
         .enumerate()
@@ -85,12 +85,12 @@ pub async fn run(all: bool, changed: bool) -> Result<()> {
             let path = service.path.clone();
             let command = service.dev_command.clone();
             let color = get_color_for_index(idx);
-            tokio::spawn(async move { run_build(&name, &path, &command, color).await })
+            tokio::spawn(async move { run_lint(&name, &path, &command, color).await })
         })
         .collect();
 
-    // Wait for all builds to complete
-    let results: Vec<BuildResult> = join_all(handles)
+    // Wait for all lints to complete
+    let results: Vec<LintResult> = join_all(handles)
         .await
         .into_iter()
         .filter_map(|r| r.ok())
@@ -128,16 +128,13 @@ pub async fn run(all: bool, changed: bool) -> Result<()> {
     println!();
     if failed > 0 {
         println!(
-            "Build completed: {} succeeded, {} failed",
+            "Lint completed: {} succeeded, {} failed",
             style(succeeded).green(),
             style(failed).red()
         );
         std::process::exit(1);
     } else {
-        println!(
-            "Build completed: {} succeeded",
-            style(succeeded).green()
-        );
+        println!("Lint completed: {} succeeded", style(succeeded).green());
     }
 
     Ok(())
@@ -160,10 +157,10 @@ fn select_services<'a>(
     let project_config = ProjectConfig::load(git_root).unwrap_or_default();
 
     // Use saved selection if available
-    let defaults: Vec<bool> = if !project_config.selected_build_services.is_empty() {
+    let defaults: Vec<bool> = if !project_config.selected_lint_services.is_empty() {
         services
             .iter()
-            .map(|s| project_config.selected_build_services.contains(&s.name))
+            .map(|s| project_config.selected_lint_services.contains(&s.name))
             .collect()
     } else {
         // Default: select all
@@ -172,7 +169,7 @@ fn select_services<'a>(
 
     let theme = create_theme();
     let selections = MultiSelect::with_theme(&theme)
-        .with_prompt("Select services to build")
+        .with_prompt("Select services to lint")
         .items(&items)
         .defaults(&defaults)
         .interact_on(&Term::stderr())?;
@@ -185,7 +182,7 @@ fn select_services<'a>(
 
     // Save selection for next time
     let mut project_config = ProjectConfig::load(git_root).unwrap_or_default();
-    project_config.selected_build_services = selected.iter().map(|s| s.name.clone()).collect();
+    project_config.selected_lint_services = selected.iter().map(|s| s.name.clone()).collect();
     if let Err(e) = project_config.save(git_root) {
         eprintln!(
             "{} Failed to save selection: {}",
@@ -197,14 +194,14 @@ fn select_services<'a>(
     Ok(selected)
 }
 
-async fn run_build(name: &str, path: &std::path::Path, command: &str, color: Style) -> BuildResult {
+async fn run_lint(name: &str, path: &std::path::Path, command: &str, color: Style) -> LintResult {
     let start = Instant::now();
 
-    // For npm scripts, use "npm run build"; for make, use command directly
+    // For npm scripts, use "npm run lint"; for make, use command directly
     let full_command = if command.starts_with("make") {
         command.to_string()
     } else {
-        "npm run build".to_string()
+        "npm run lint".to_string()
     };
 
     let mut child = match Command::new("sh")
@@ -217,7 +214,7 @@ async fn run_build(name: &str, path: &std::path::Path, command: &str, color: Sty
     {
         Ok(child) => child,
         Err(_) => {
-            return BuildResult {
+            return LintResult {
                 name: name.to_string(),
                 success: false,
                 duration: start.elapsed(),
@@ -264,13 +261,13 @@ async fn run_build(name: &str, path: &std::path::Path, command: &str, color: Sty
     let _ = stderr_handle.await;
 
     match status {
-        Ok(status) => BuildResult {
+        Ok(status) => LintResult {
             name: name.to_string(),
             success: status.success(),
             duration,
             exit_code: status.code(),
         },
-        Err(_) => BuildResult {
+        Err(_) => LintResult {
             name: name.to_string(),
             success: false,
             duration,
