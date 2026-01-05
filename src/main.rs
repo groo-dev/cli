@@ -1,6 +1,7 @@
 mod auth;
 mod commands;
 mod config;
+mod dev_tui;
 mod discovery;
 mod ops;
 mod pad;

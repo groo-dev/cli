@@ -1,13 +1,11 @@
 use anyhow::Result;
 use console::{style, Style, Term};
 use dialoguer::{theme::ColorfulTheme, Confirm, MultiSelect};
-use tokio::sync::broadcast;
 
 use crate::commands::stop::{get_pids_by_port, kill_process};
-use crate::config::get_service_log_file;
+use crate::dev_tui;
 use crate::discovery::{discover_services, find_project_root, get_project_name, Service};
 use crate::project_config::ProjectConfig;
-use crate::runner::{get_color_for_index, spawn_service, wait_for_processes, ProcessHandle};
 use crate::state::{is_port_in_use, State};
 
 fn create_theme() -> ColorfulTheme {
@@ -160,7 +158,10 @@ pub async fn run() -> Result<()> {
         return Ok(());
     }
 
-    let selected_services: Vec<&Service> = selections.iter().map(|&i| &services[i]).collect();
+    let selected_services: Vec<Service> = selections
+        .iter()
+        .map(|&i| services[i].clone())
+        .collect();
 
     // Save selection for next time
     let mut project_config = ProjectConfig::load(&git_root).unwrap_or_default();
@@ -173,67 +174,8 @@ pub async fn run() -> Result<()> {
         );
     }
 
-    println!(
-        "\n{} Starting {} service(s)...\n",
-        style("→").green().bold(),
-        selected_services.len()
-    );
-
-    // Set up shutdown signal
-    let (shutdown_tx, _) = broadcast::channel::<()>(1);
-
-    // Set up Ctrl+C handler
-    let shutdown_tx_clone = shutdown_tx.clone();
-    tokio::spawn(async move {
-        tokio::signal::ctrl_c().await.ok();
-        println!("\n{} Shutting down...", style("→").yellow().bold());
-        let _ = shutdown_tx_clone.send(());
-    });
-
-    // Spawn all selected services
-    let mut handles: Vec<ProcessHandle> = Vec::new();
-    for (idx, service) in selected_services.iter().enumerate() {
-        let color = get_color_for_index(idx);
-        let log_file = get_service_log_file(&service.path);
-
-        match spawn_service(
-            &service.name,
-            &service.path,
-            &service.dev_command,
-            color.clone(),
-            log_file,
-        )
-        .await
-        {
-            Ok(handle) => {
-                if let Some(pid) = handle.pid() {
-                    state.add_service(
-                        &project_name,
-                        git_root.clone(),
-                        &service.name,
-                        pid,
-                        service.port,
-                    );
-                }
-                handles.push(handle);
-            }
-            Err(e) => {
-                eprintln!(
-                    "{} Failed to start {}: {}",
-                    style("✗").red().bold(),
-                    service.name,
-                    e
-                );
-            }
-        }
-    }
-
-    // Save state
-    state.save()?;
-
-    // Wait for all processes or shutdown
-    let shutdown_rx = shutdown_tx.subscribe();
-    wait_for_processes(handles, shutdown_rx).await;
+    // Launch TUI with selected services
+    dev_tui::run(project_name.clone(), git_root.clone(), selected_services).await?;
 
     // Clean up state on exit
     let mut state = State::load().unwrap_or_default();
