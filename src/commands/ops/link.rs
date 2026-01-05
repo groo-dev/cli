@@ -1,9 +1,11 @@
 use anyhow::{anyhow, Context, Result};
 use console::style;
 use dialoguer::{Confirm, FuzzySelect, Input};
+use std::collections::HashSet;
+use std::path::Path;
 
 use crate::auth::storage::AuthState;
-use crate::discovery::{discover_services, find_project_root};
+use crate::discovery::{discover_services, discover_services_by_script, find_project_root};
 use crate::ops::{
     delete_private_key, generate_key_pair, has_private_key, store_private_key, OpsClient,
     OpsConfig, ServiceLink,
@@ -15,26 +17,25 @@ pub async fn run_link(service: Option<String>) -> Result<()> {
         .ok_or_else(|| anyhow!("Not authenticated. Run 'groo auth login' first."))?;
     let root = find_project_root()?;
 
-    // Select service
-    let services = discover_services(&root)?;
+    // Discover all services (dev, build, or lint)
+    let services = discover_all_services(&root)?;
     if services.is_empty() {
         return Err(anyhow!("No services found in project"));
     }
 
     let service_name = match service {
         Some(name) => {
-            if !services.iter().any(|s| s.name == name) {
+            if !services.contains(&name) {
                 return Err(anyhow!("Service '{}' not found", name));
             }
             name
         }
         None => {
-            let names: Vec<&str> = services.iter().map(|s| s.name.as_str()).collect();
             let selection = FuzzySelect::new()
                 .with_prompt("Select service to link")
-                .items(&names)
+                .items(&services)
                 .interact()?;
-            names[selection].to_string()
+            services[selection].clone()
         }
     };
 
@@ -284,4 +285,24 @@ async fn create_new_key_pair(
         Some(key_pair.public_key_jwk),
         Some(key_pair.private_key_base64),
     ))
+}
+
+/// Discover all services that might need env vars (dev, build, or lint)
+fn discover_all_services(root: &Path) -> Result<Vec<String>> {
+    let mut names = HashSet::new();
+
+    // Collect from dev, build, and lint scripts
+    for service in discover_services(root).unwrap_or_default() {
+        names.insert(service.name);
+    }
+    for service in discover_services_by_script(root, "build").unwrap_or_default() {
+        names.insert(service.name);
+    }
+    for service in discover_services_by_script(root, "lint").unwrap_or_default() {
+        names.insert(service.name);
+    }
+
+    let mut result: Vec<String> = names.into_iter().collect();
+    result.sort();
+    Ok(result)
 }

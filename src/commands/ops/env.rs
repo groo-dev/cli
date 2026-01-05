@@ -6,7 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::auth::storage::AuthState;
-use crate::discovery::{discover_services, find_project_root};
+use crate::discovery::{discover_services, discover_services_by_script, find_project_root, Service};
 use crate::ops::{
     decrypt_secret, encrypt_secret, get_private_key, ConfigType, CreateConfigRequest, OpsClient,
     OpsConfig,
@@ -75,11 +75,8 @@ pub async fn run_diff(service: Option<String>, environment: String) -> Result<()
         .ok_or_else(|| anyhow!("Service '{}' is not linked", service_name))?;
 
     // Find service path
-    let services = discover_services(&root)?;
-    let service_info = services
-        .iter()
-        .find(|s| s.name == service_name)
-        .ok_or_else(|| anyhow!("Service not found"))?;
+    let service_info = find_service_by_name(&root, &service_name)
+        .ok_or_else(|| anyhow!("Service '{}' not found", service_name))?;
 
     // Get local env file
     let env_file = detect_env_file(&service_info.path);
@@ -176,11 +173,8 @@ pub async fn run_pull(service: Option<String>, environment: String) -> Result<()
         .ok_or_else(|| anyhow!("Service '{}' is not linked", service_name))?;
 
     // Find service path
-    let services = discover_services(&root)?;
-    let service_info = services
-        .iter()
-        .find(|s| s.name == service_name)
-        .ok_or_else(|| anyhow!("Service not found"))?;
+    let service_info = find_service_by_name(&root, &service_name)
+        .ok_or_else(|| anyhow!("Service '{}' not found", service_name))?;
 
     let env_file = detect_env_file(&service_info.path);
 
@@ -260,11 +254,8 @@ pub async fn run_push(service: Option<String>, environment: String) -> Result<()
         .ok_or_else(|| anyhow!("Service '{}' is not linked", service_name))?;
 
     // Find service path
-    let services = discover_services(&root)?;
-    let service_info = services
-        .iter()
-        .find(|s| s.name == service_name)
-        .ok_or_else(|| anyhow!("Service not found"))?;
+    let service_info = find_service_by_name(&root, &service_name)
+        .ok_or_else(|| anyhow!("Service '{}' not found", service_name))?;
 
     let env_file = detect_env_file(&service_info.path);
     let local = parse_env_file(&env_file)?;
@@ -480,6 +471,29 @@ fn parse_env_file(path: &Path) -> Result<HashMap<String, String>> {
     }
 
     Ok(map)
+}
+
+/// Find a service by name from any script type (dev, build, or lint)
+fn find_service_by_name(root: &Path, name: &str) -> Option<Service> {
+    // Try dev services first
+    if let Ok(services) = discover_services(root)
+        && let Some(s) = services.into_iter().find(|s| s.name == name)
+    {
+        return Some(s);
+    }
+    // Try build services
+    if let Ok(services) = discover_services_by_script(root, "build")
+        && let Some(s) = services.into_iter().find(|s| s.name == name)
+    {
+        return Some(s);
+    }
+    // Try lint services
+    if let Ok(services) = discover_services_by_script(root, "lint")
+        && let Some(s) = services.into_iter().find(|s| s.name == name)
+    {
+        return Some(s);
+    }
+    None
 }
 
 /// Prompt user to classify a variable as secret or not
