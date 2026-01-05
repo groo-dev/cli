@@ -1,6 +1,8 @@
+mod auth;
 mod commands;
 mod config;
 mod discovery;
+mod pad;
 mod project_config;
 mod runner;
 mod state;
@@ -62,6 +64,42 @@ enum Commands {
     },
     /// Check project configuration for issues
     Doctor,
+    /// Authenticate with Groo accounts
+    Auth {
+        #[command(subcommand)]
+        command: AuthCommands,
+    },
+    /// Add text or files to your Pad
+    Pad {
+        #[command(subcommand)]
+        command: PadCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum AuthCommands {
+    /// Login to Groo
+    Login {
+        /// Use Personal Access Token instead of browser OAuth
+        #[arg(long)]
+        pat: bool,
+    },
+    /// Show current authentication status
+    Status,
+    /// Logout and clear credentials
+    Logout,
+}
+
+#[derive(Subcommand)]
+enum PadCommands {
+    /// Add text or files to your pad list
+    Add {
+        /// Text to add (reads from stdin if not provided)
+        text: Option<String>,
+        /// File(s) to upload (supports globs and folders)
+        #[arg(short = 'f', long = "file", action = clap::ArgAction::Append)]
+        files: Vec<PathBuf>,
+    },
 }
 
 #[tokio::main]
@@ -84,5 +122,13 @@ async fn main() -> Result<()> {
         Commands::Stop { project } => commands::stop::run(project),
         Commands::Logs { lines, follow } => commands::logs::run(lines, follow).await,
         Commands::Doctor => commands::doctor::run(),
+        Commands::Auth { command } => match command {
+            AuthCommands::Login { pat } => commands::auth::login::run(pat).await,
+            AuthCommands::Status => commands::auth::status::run(),
+            AuthCommands::Logout => commands::auth::logout::run(),
+        },
+        Commands::Pad { command } => match command {
+            PadCommands::Add { text, files } => commands::pad::add::run(text, files).await,
+        },
     }
 }
