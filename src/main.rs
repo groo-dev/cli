@@ -2,6 +2,7 @@ mod auth;
 mod commands;
 mod config;
 mod discovery;
+mod ops;
 mod pad;
 mod project_config;
 mod runner;
@@ -86,6 +87,11 @@ enum Commands {
         #[command(subcommand)]
         command: PadCommands,
     },
+    /// Manage ops environment variables and secrets
+    Ops {
+        #[command(subcommand)]
+        command: OpsCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -116,6 +122,67 @@ enum PadCommands {
     List,
 }
 
+#[derive(Subcommand)]
+enum OpsCommands {
+    /// Link service to ops application
+    Link {
+        /// Service name (interactive picker if not provided)
+        #[arg(short, long)]
+        service: Option<String>,
+    },
+    /// Unlink service from ops
+    Unlink {
+        /// Service name (interactive picker if not provided)
+        #[arg(short, long)]
+        service: Option<String>,
+    },
+    /// Manage environment variables and secrets
+    Env {
+        #[command(subcommand)]
+        command: OpsEnvCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum OpsEnvCommands {
+    /// List all env vars and secrets
+    List {
+        /// Service name (interactive picker if not provided)
+        #[arg(short, long)]
+        service: Option<String>,
+        /// Environment (development, staging, production)
+        #[arg(long, default_value = "development")]
+        env: String,
+    },
+    /// Show diff between local and remote
+    Diff {
+        /// Service name (interactive picker if not provided)
+        #[arg(short, long)]
+        service: Option<String>,
+        /// Environment (development, staging, production)
+        #[arg(long, default_value = "development")]
+        env: String,
+    },
+    /// Pull remote config to local env file
+    Pull {
+        /// Service name (interactive picker if not provided)
+        #[arg(short, long)]
+        service: Option<String>,
+        /// Environment (development, staging, production)
+        #[arg(long, default_value = "development")]
+        env: String,
+    },
+    /// Push local env file to remote
+    Push {
+        /// Service name (interactive picker if not provided)
+        #[arg(short, long)]
+        service: Option<String>,
+        /// Environment (development, staging, production)
+        #[arg(long, default_value = "development")]
+        env: String,
+    },
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -136,7 +203,7 @@ async fn main() -> Result<()> {
         Commands::Open { service } => commands::open::run(&service),
         Commands::Stop { project } => commands::stop::run(project),
         Commands::Logs { lines, follow } => commands::logs::run(lines, follow).await,
-        Commands::Doctor => commands::doctor::run(),
+        Commands::Doctor => commands::doctor::run().await,
         Commands::Auth { command } => match command {
             AuthCommands::Login { pat } => commands::auth::login::run(pat).await,
             AuthCommands::Status => commands::auth::status::run(),
@@ -145,6 +212,24 @@ async fn main() -> Result<()> {
         Commands::Pad { command } => match command {
             PadCommands::Add { text, files } => commands::pad::add::run(text, files).await,
             PadCommands::List => commands::pad::list::run().await,
+        },
+        Commands::Ops { command } => match command {
+            OpsCommands::Link { service } => commands::ops::link::run_link(service).await,
+            OpsCommands::Unlink { service } => commands::ops::link::run_unlink(service).await,
+            OpsCommands::Env { command } => match command {
+                OpsEnvCommands::List { service, env } => {
+                    commands::ops::env::run_list(service, env).await
+                }
+                OpsEnvCommands::Diff { service, env } => {
+                    commands::ops::env::run_diff(service, env).await
+                }
+                OpsEnvCommands::Pull { service, env } => {
+                    commands::ops::env::run_pull(service, env).await
+                }
+                OpsEnvCommands::Push { service, env } => {
+                    commands::ops::env::run_push(service, env).await
+                }
+            },
         },
     }
 }

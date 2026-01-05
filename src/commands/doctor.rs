@@ -1,12 +1,15 @@
 use anyhow::Result;
 use console::{style, Term};
-use dialoguer::Confirm;
+use dialoguer::{Confirm, MultiSelect};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
 
+use crate::auth::storage::AuthState;
+use crate::commands;
 use crate::discovery::ports::FrameworkType;
 use crate::discovery::{discover_services, discover_services_by_script, find_project_root};
+use crate::ops::{has_private_key, OpsConfig};
 use crate::project_config::ProjectConfig;
 
 const PRE_COMMIT_HOOK: &str = r#"#!/bin/sh
@@ -19,7 +22,7 @@ const PRE_PUSH_HOOK: &str = r#"#!/bin/sh
 groo build --changed
 "#;
 
-pub fn run() -> Result<()> {
+pub async fn run() -> Result<()> {
     let mut has_errors = false;
     let mut has_warnings = false;
 
@@ -290,7 +293,61 @@ pub fn run() -> Result<()> {
         fixable_hooks.push((pre_push_path.clone(), PRE_PUSH_HOOK, "pre-push"));
     }
 
-    // 8. Print services table
+    // 8. Check auth status
+    let auth = AuthState::load()?;
+    if auth.is_none() {
+        println!(
+            "{} Not authenticated (run 'groo auth login')",
+            style("!").yellow()
+        );
+        has_warnings = true;
+    } else {
+        let email = auth
+            .as_ref()
+            .and_then(|a| a.user_email.as_ref())
+            .map(|e| e.as_str())
+            .unwrap_or("unknown");
+        println!("{} Authenticated as {}", style("✓").green(), email);
+    }
+
+    // 9. Check ops links + private keys
+    let ops_config = OpsConfig::load(&project_root)?;
+    let mut unlinked_services: Vec<String> = Vec::new();
+
+    for service_name in all_services.keys() {
+        match ops_config.get_service(service_name) {
+            Some(link) => {
+                // Linked - check for private key
+                if !has_private_key(&link.application_id) {
+                    println!(
+                        "{} Service '{}' linked to ops ({}) but missing private key",
+                        style("!").yellow(),
+                        service_name,
+                        link.application_name
+                    );
+                    has_warnings = true;
+                }
+            }
+            None => {
+                unlinked_services.push(service_name.clone());
+            }
+        }
+    }
+
+    if unlinked_services.is_empty() {
+        println!("{} All services linked to ops", style("✓").green());
+    } else {
+        for name in &unlinked_services {
+            println!(
+                "{} Service '{}' not linked to ops",
+                style("✗").red(),
+                name
+            );
+        }
+        has_errors = true;
+    }
+
+    // 10. Print services table
     if !all_services.is_empty() {
         println!();
         println!("{}", style("Services:").bold());
@@ -349,6 +406,49 @@ pub fn run() -> Result<()> {
                     has_errors = true;
                     break;
                 }
+            }
+        }
+    }
+
+    // Offer to fix ops links if any are missing (only if authenticated)
+    if !unlinked_services.is_empty() && auth.is_some() {
+        println!();
+        if Confirm::new()
+            .with_prompt("Set up ops for services?")
+            .default(true)
+            .interact_on(&Term::stderr())?
+        {
+            // Sort for consistent display
+            unlinked_services.sort();
+
+            // Multi-select which services to link
+            let selections = MultiSelect::new()
+                .with_prompt("Select services to link")
+                .items(&unlinked_services)
+                .interact_on(&Term::stderr())?;
+
+            if !selections.is_empty() {
+                println!();
+                for idx in selections {
+                    let service = &unlinked_services[idx];
+                    println!("{}", style(format!("Linking {}...", service)).bold());
+                    if let Err(e) =
+                        commands::ops::link::run_link(Some(service.clone())).await
+                    {
+                        println!(
+                            "  {} Failed to link '{}': {}",
+                            style("✗").red(),
+                            service,
+                            e
+                        );
+                    }
+                    println!();
+                }
+                // Re-evaluate has_errors since we may have fixed some
+                let updated_config = OpsConfig::load(&project_root)?;
+                has_errors = all_services
+                    .keys()
+                    .any(|name| updated_config.get_service(name).is_none());
             }
         }
     }

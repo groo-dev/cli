@@ -48,3 +48,6 @@ uuid = { version = "1.19", features = ["v4"] }
 ratatui = "0.30"
 crossterm = "0.29"
 arboard = "3.6"
+
+# Ops encryption (RSA-OAEP + AES-GCM hybrid)
+rsa = { version = "0.9", features = ["sha2"] }
