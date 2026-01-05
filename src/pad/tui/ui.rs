@@ -1,10 +1,10 @@
 use chrono::{TimeZone, Utc};
 use ratatui::{
     prelude::*,
-    widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
 };
 
-use super::app::{App, StatusType};
+use super::app::{App, AppMode, DirPickerState, StatusType};
 
 pub fn render(f: &mut Frame, app: &App) {
     let chunks = Layout::default()
@@ -19,6 +19,11 @@ pub fn render(f: &mut Frame, app: &App) {
     render_header(f, chunks[0], app);
     render_content(f, chunks[1], app);
     render_footer(f, chunks[2], app);
+
+    // Render overlay if in picker mode
+    if let AppMode::DirectoryPicker(ref picker) = app.mode {
+        render_dir_picker(f, picker);
+    }
 }
 
 fn render_header(f: &mut Frame, area: Rect, app: &App) {
@@ -188,4 +193,94 @@ fn format_size(bytes: u64) -> String {
     } else {
         format!("{} B", bytes)
     }
+}
+
+fn render_dir_picker(f: &mut Frame, picker: &DirPickerState) {
+    let area = centered_rect(60, 70, f.area());
+
+    // Clear background
+    f.render_widget(Clear, area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3), // Path display
+            Constraint::Min(5),    // Directory list
+            Constraint::Length(2), // Help
+        ])
+        .split(area);
+
+    // Current path
+    let path_display = Paragraph::new(format!(" {}", picker.current_dir.display()))
+        .style(Style::default().fg(Color::Cyan))
+        .block(
+            Block::default()
+                .title(" Select Directory ")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Cyan)),
+        );
+    f.render_widget(path_display, chunks[0]);
+
+    // Directory list
+    let items: Vec<ListItem> = picker
+        .entries
+        .iter()
+        .enumerate()
+        .map(|(i, entry)| {
+            let prefix = if i == picker.selected { ">" } else { " " };
+            let icon = if entry.name == ".." { ".." } else { "/" };
+            let display = if entry.name == ".." {
+                "..".to_string()
+            } else {
+                format!("{}{}", entry.name, icon)
+            };
+
+            let style = if i == picker.selected {
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default()
+            };
+
+            ListItem::new(format!(" {} {}", prefix, display)).style(style)
+        })
+        .collect();
+
+    let list = List::new(items).block(
+        Block::default()
+            .borders(Borders::LEFT | Borders::RIGHT)
+            .border_style(Style::default().fg(Color::Cyan)),
+    );
+    f.render_widget(list, chunks[1]);
+
+    // Help text
+    let help = Paragraph::new(" [↑↓] Navigate  [Enter] Open  [Space] Select  [~] Home  [Esc] Cancel")
+        .style(Style::default().fg(Color::DarkGray))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Cyan)),
+        );
+    f.render_widget(help, chunks[2]);
+}
+
+fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage((100 - percent_y) / 2),
+            Constraint::Percentage(percent_y),
+            Constraint::Percentage((100 - percent_y) / 2),
+        ])
+        .split(r);
+
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Percentage(percent_x),
+            Constraint::Percentage((100 - percent_x) / 2),
+        ])
+        .split(popup_layout[1])[1]
 }

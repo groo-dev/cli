@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::time::Instant;
 
 #[derive(Debug, Clone)]
@@ -25,10 +26,86 @@ pub enum StatusType {
     Info,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum ConfirmAction {
-    None,
-    Delete(String), // item_id
+/// App mode for handling different UI states
+pub enum AppMode {
+    Normal,
+    ConfirmDelete(String), // item_id
+    DirectoryPicker(DirPickerState),
+}
+
+/// State for the directory picker overlay
+pub struct DirPickerState {
+    pub current_dir: PathBuf,
+    pub entries: Vec<DirEntry>,
+    pub selected: usize,
+}
+
+/// A directory entry in the picker
+pub struct DirEntry {
+    pub name: String,
+    pub path: PathBuf,
+}
+
+impl DirPickerState {
+    pub fn new(start_dir: PathBuf) -> std::io::Result<Self> {
+        let mut state = Self {
+            current_dir: start_dir,
+            entries: Vec::new(),
+            selected: 0,
+        };
+        state.refresh()?;
+        Ok(state)
+    }
+
+    pub fn refresh(&mut self) -> std::io::Result<()> {
+        self.entries.clear();
+
+        // Add parent directory entry
+        if let Some(parent) = self.current_dir.parent() {
+            self.entries.push(DirEntry {
+                name: "..".to_string(),
+                path: parent.to_path_buf(),
+            });
+        }
+
+        // Read directory entries (directories only)
+        let mut dirs: Vec<DirEntry> = std::fs::read_dir(&self.current_dir)?
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.metadata().map(|m| m.is_dir()).unwrap_or(false))
+            .filter(|entry| !entry.file_name().to_string_lossy().starts_with('.'))
+            .map(|entry| DirEntry {
+                name: entry.file_name().to_string_lossy().to_string(),
+                path: entry.path(),
+            })
+            .collect();
+
+        // Sort alphabetically (case-insensitive)
+        dirs.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        self.entries.extend(dirs);
+
+        self.selected = 0;
+        Ok(())
+    }
+
+    pub fn navigate_into(&mut self) -> std::io::Result<()> {
+        if let Some(entry) = self.entries.get(self.selected) {
+            self.current_dir = entry.path.clone();
+            self.refresh()?;
+        }
+        Ok(())
+    }
+
+    pub fn select_next(&mut self) {
+        if self.selected < self.entries.len().saturating_sub(1) {
+            self.selected += 1;
+        }
+    }
+
+    pub fn select_prev(&mut self) {
+        if self.selected > 0 {
+            self.selected -= 1;
+        }
+    }
 }
 
 #[allow(dead_code)] // Some fields reserved for future features
@@ -39,7 +116,7 @@ pub struct App {
     pub token: String,
     pub should_quit: bool,
     pub status_message: Option<(String, StatusType, Instant)>,
-    pub confirm_action: ConfirmAction,
+    pub mode: AppMode,
     pub scroll_offset: usize,
 }
 
@@ -52,7 +129,7 @@ impl App {
             token,
             should_quit: false,
             status_message: None,
-            confirm_action: ConfirmAction::None,
+            mode: AppMode::Normal,
             scroll_offset: 0,
         }
     }
@@ -104,13 +181,21 @@ impl App {
 
     pub fn start_delete_confirm(&mut self) {
         if let Some(item) = self.selected_item() {
-            self.confirm_action = ConfirmAction::Delete(item.id.clone());
+            self.mode = AppMode::ConfirmDelete(item.id.clone());
             self.set_status("Press 'y' to confirm delete, any other key to cancel", StatusType::Info);
         }
     }
 
-    pub fn cancel_confirm(&mut self) {
-        self.confirm_action = ConfirmAction::None;
+    pub fn start_dir_picker(&mut self) {
+        let start = dirs::download_dir().unwrap_or_else(|| PathBuf::from("."));
+        match DirPickerState::new(start) {
+            Ok(state) => self.mode = AppMode::DirectoryPicker(state),
+            Err(e) => self.set_error(&format!("Failed to open directory: {}", e)),
+        }
+    }
+
+    pub fn cancel_mode(&mut self) {
+        self.mode = AppMode::Normal;
         self.status_message = None;
     }
 

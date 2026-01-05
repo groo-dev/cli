@@ -1,10 +1,9 @@
 use anyhow::Result;
 use arboard::Clipboard;
 use crossterm::event::KeyCode;
-use dialoguer::Input;
 use std::path::PathBuf;
 
-use super::app::{App, ConfirmAction, DecryptedFile, DecryptedItem, StatusType};
+use super::app::{App, AppMode, DecryptedFile, DecryptedItem, StatusType};
 use crate::pad::client::PadClient;
 use crate::pad::crypto::decrypt;
 use crate::pad::types::UserState;
@@ -14,24 +13,15 @@ pub async fn handle_key(app: &mut App, key: KeyCode, client: &PadClient) -> Resu
     // Clear expired status messages
     app.clear_status_if_expired();
 
-    // Handle confirmation mode
-    if let ConfirmAction::Delete(item_id) = &app.confirm_action {
-        let item_id = item_id.clone();
-        match key {
-            KeyCode::Char('y') | KeyCode::Char('Y') => {
-                // TODO: Send delete message to server when persistent WS is implemented
-                app.remove_item(&item_id);
-                app.confirm_action = ConfirmAction::None;
-                app.set_success("Item deleted");
-            }
-            _ => {
-                app.cancel_confirm();
-            }
-        }
-        return Ok(false);
+    // Dispatch based on current mode
+    match &app.mode {
+        AppMode::DirectoryPicker(_) => handle_picker_key(app, key, client).await,
+        AppMode::ConfirmDelete(_) => handle_confirm_delete_key(app, key),
+        AppMode::Normal => handle_normal_key(app, key, client).await,
     }
+}
 
-    // Normal mode
+async fn handle_normal_key(app: &mut App, key: KeyCode, client: &PadClient) -> Result<bool> {
     match key {
         KeyCode::Char('q') | KeyCode::Esc => {
             app.should_quit = true;
@@ -51,7 +41,16 @@ pub async fn handle_key(app: &mut App, key: KeyCode, client: &PadClient) -> Resu
         }
 
         KeyCode::Char('d') => {
-            download_files(app, client).await?;
+            // Check if there are files to download first
+            if let Some(item) = app.selected_item() {
+                if item.files.is_empty() {
+                    app.set_status("No files to download", StatusType::Info);
+                } else {
+                    app.start_dir_picker();
+                }
+            } else {
+                app.set_error("No item selected");
+            }
         }
 
         KeyCode::Char('x') | KeyCode::Delete => {
@@ -60,6 +59,89 @@ pub async fn handle_key(app: &mut App, key: KeyCode, client: &PadClient) -> Resu
 
         KeyCode::Char('r') => {
             refresh_items(app, client).await?;
+        }
+
+        _ => {}
+    }
+
+    Ok(false)
+}
+
+fn handle_confirm_delete_key(app: &mut App, key: KeyCode) -> Result<bool> {
+    // Extract item_id before modifying app
+    let item_id = if let AppMode::ConfirmDelete(id) = &app.mode {
+        id.clone()
+    } else {
+        return Ok(false);
+    };
+
+    match key {
+        KeyCode::Char('y') | KeyCode::Char('Y') => {
+            // TODO: Send delete message to server when persistent WS is implemented
+            app.remove_item(&item_id);
+            app.mode = AppMode::Normal;
+            app.set_success("Item deleted");
+        }
+        _ => {
+            app.cancel_mode();
+        }
+    }
+
+    Ok(false)
+}
+
+async fn handle_picker_key(app: &mut App, key: KeyCode, client: &PadClient) -> Result<bool> {
+    // We need to handle the picker state carefully due to borrow checker
+    match key {
+        KeyCode::Esc => {
+            app.cancel_mode();
+        }
+
+        KeyCode::Up | KeyCode::Char('k') => {
+            if let AppMode::DirectoryPicker(ref mut picker) = app.mode {
+                picker.select_prev();
+            }
+        }
+
+        KeyCode::Down | KeyCode::Char('j') => {
+            if let AppMode::DirectoryPicker(ref mut picker) = app.mode {
+                picker.select_next();
+            }
+        }
+
+        KeyCode::Enter => {
+            // Navigate into selected directory
+            if let AppMode::DirectoryPicker(ref mut picker) = app.mode {
+                if let Err(e) = picker.navigate_into() {
+                    app.set_error(&format!("Failed to open directory: {}", e));
+                }
+            }
+        }
+
+        KeyCode::Char(' ') => {
+            // Select current directory and download
+            let download_dir = if let AppMode::DirectoryPicker(ref picker) = app.mode {
+                Some(picker.current_dir.clone())
+            } else {
+                None
+            };
+
+            if let Some(dir) = download_dir {
+                app.mode = AppMode::Normal;
+                do_download(app, client, &dir).await?;
+            }
+        }
+
+        KeyCode::Char('~') => {
+            // Go to home directory
+            if let AppMode::DirectoryPicker(ref mut picker) = app.mode {
+                if let Some(home) = dirs::home_dir() {
+                    picker.current_dir = home;
+                    if let Err(e) = picker.refresh() {
+                        app.set_error(&format!("Failed to open home directory: {}", e));
+                    }
+                }
+            }
         }
 
         _ => {}
@@ -90,7 +172,7 @@ fn copy_to_clipboard(app: &mut App) -> Result<()> {
     Ok(())
 }
 
-async fn download_files(app: &mut App, client: &PadClient) -> Result<()> {
+async fn do_download(app: &mut App, client: &PadClient, download_dir: &PathBuf) -> Result<()> {
     let Some(item) = app.selected_item().cloned() else {
         app.set_error("No item selected");
         return Ok(());
@@ -101,25 +183,12 @@ async fn download_files(app: &mut App, client: &PadClient) -> Result<()> {
         return Ok(());
     }
 
-    // Get download directory from user
-    // Note: This will temporarily exit raw mode for the prompt
-    crossterm::terminal::disable_raw_mode()?;
-
-    let default_dir = dirs::download_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .to_string_lossy()
-        .to_string();
-
-    let download_dir: String = Input::new()
-        .with_prompt("Download to directory")
-        .default(default_dir)
-        .interact_text()?;
-
-    crossterm::terminal::enable_raw_mode()?;
-
-    let download_path = PathBuf::from(&download_dir);
-    if !download_path.exists() {
-        std::fs::create_dir_all(&download_path)?;
+    // Ensure directory exists
+    if !download_dir.exists() {
+        if let Err(e) = std::fs::create_dir_all(download_dir) {
+            app.set_error(&format!("Failed to create directory: {}", e));
+            return Ok(());
+        }
     }
 
     // Download each file
@@ -127,7 +196,7 @@ async fn download_files(app: &mut App, client: &PadClient) -> Result<()> {
     for file in &item.files {
         match client.download_file(&file.r2_key, &app.key).await {
             Ok(data) => {
-                let file_path = download_path.join(&file.name);
+                let file_path = download_dir.join(&file.name);
                 if let Err(e) = std::fs::write(&file_path, &data) {
                     app.set_error(&format!("Failed to save {}: {}", file.name, e));
                     return Ok(());
@@ -145,7 +214,7 @@ async fn download_files(app: &mut App, client: &PadClient) -> Result<()> {
         "Downloaded {} file{} to {}",
         success_count,
         if success_count == 1 { "" } else { "s" },
-        download_dir
+        download_dir.display()
     ));
 
     Ok(())
