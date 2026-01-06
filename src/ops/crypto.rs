@@ -4,7 +4,6 @@ use aes_gcm::{
 };
 use anyhow::{Context, Result};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
-use keyring::Entry;
 use rand::RngCore;
 use rsa::{
     pkcs8::{DecodePrivateKey, EncodePrivateKey},
@@ -14,7 +13,6 @@ use rsa::{
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 
-const SERVICE_NAME: &str = "groo-cli";
 const RSA_BITS: usize = 2048;
 const AES_KEY_SIZE: usize = 32;
 const NONCE_SIZE: usize = 12;
@@ -161,44 +159,6 @@ pub fn decrypt_secret(encrypted_json: &str, private_key_base64: &str) -> Result<
         .map_err(|_| anyhow::anyhow!("AES decryption failed"))?;
 
     String::from_utf8(decrypted).context("Decrypted value is not valid UTF-8")
-}
-
-// Keychain storage for private keys
-
-/// Store private key in OS keychain
-pub fn store_private_key(app_id: &str, private_key: &str) -> Result<()> {
-    let entry = Entry::new(SERVICE_NAME, &format!("ops-{}", app_id))
-        .context("Failed to create keychain entry")?;
-    entry
-        .set_password(private_key)
-        .context("Failed to store private key in keychain")?;
-    Ok(())
-}
-
-/// Get private key from OS keychain
-pub fn get_private_key(app_id: &str) -> Result<String> {
-    let entry = Entry::new(SERVICE_NAME, &format!("ops-{}", app_id))
-        .context("Failed to create keychain entry")?;
-    entry
-        .get_password()
-        .context("Private key not found in keychain")
-}
-
-/// Check if private key exists in keychain
-pub fn has_private_key(app_id: &str) -> bool {
-    Entry::new(SERVICE_NAME, &format!("ops-{}", app_id))
-        .and_then(|e| e.get_password())
-        .is_ok()
-}
-
-/// Delete private key from OS keychain
-pub fn delete_private_key(app_id: &str) -> Result<()> {
-    let entry = Entry::new(SERVICE_NAME, &format!("ops-{}", app_id))
-        .context("Failed to create keychain entry")?;
-    entry
-        .delete_credential()
-        .context("Failed to delete private key from keychain")?;
-    Ok(())
 }
 
 // Base64 URL encoding helpers (for JWK)

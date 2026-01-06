@@ -1,22 +1,18 @@
 use anyhow::{anyhow, Result};
 use console::style;
 
-use crate::auth::storage::AuthState;
+use crate::auth::storage::load_auth_with_password;
 use crate::pass::client::PassClient;
+use crate::pass::totp;
 use crate::pass::types::VaultItem;
 
-pub async fn run(query: &str, username: bool, totp: bool, show: bool) -> Result<()> {
-    // Check auth
-    let auth = AuthState::load()?.ok_or_else(|| {
-        anyhow!("Not logged in. Run 'groo auth login' first.")
-    })?;
-
-    // Prompt for master password
-    let password = rpassword::prompt_password("🔑 Master password: ")?;
+pub async fn run(query: &str, username: bool, copy_totp: bool, show: bool) -> Result<()> {
+    // Check auth (prompts for master password)
+    let (auth, master_password) = load_auth_with_password()?;
 
     // Create client and unlock vault
     let client = PassClient::new(auth.access_token);
-    let (vault, _key, _version) = client.unlock(&password).await?;
+    let (vault, _key, _version) = client.unlock(&master_password).await?;
 
     // Search for matching items (case-insensitive)
     let query_lower = query.to_lowercase();
@@ -80,10 +76,27 @@ pub async fn run(query: &str, username: bool, totp: bool, show: bool) -> Result<
     // Handle based on item type and flags
     match item {
         VaultItem::Password(p) => {
-            if totp {
-                if let Some(ref _totp_config) = p.totp {
-                    // TODO: Implement TOTP generation
-                    println!("{}", style("TOTP not yet implemented").yellow());
+            if copy_totp {
+                if let Some(ref totp_config) = p.totp {
+                    match totp::generate(totp_config) {
+                        Ok(code) => {
+                            if show {
+                                println!("{}", code);
+                            } else {
+                                copy_to_clipboard(&code)?;
+                                let remaining = totp::seconds_remaining(totp_config.period);
+                                println!(
+                                    "{} {} ({}s remaining)",
+                                    style("✓").green(),
+                                    style(format!("TOTP copied: {}", code)).bold(),
+                                    remaining
+                                );
+                            }
+                        }
+                        Err(e) => {
+                            println!("{}", style(format!("TOTP error: {}", e)).red());
+                        }
+                    }
                 } else {
                     println!("{}", style("No TOTP configured for this item").red());
                 }

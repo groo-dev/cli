@@ -42,6 +42,19 @@ async fn login_with_pat() -> Result<()> {
     let user_email = validate_token(&token).await?;
     println!("{}", style("OK").green());
 
+    // Prompt for master password
+    let master_password = if AuthState::exists() {
+        rpassword::prompt_password("Master password: ")?
+    } else {
+        println!("\nSet a master password to encrypt your credentials.");
+        let password = rpassword::prompt_password("New master password: ")?;
+        let confirm = rpassword::prompt_password("Confirm master password: ")?;
+        if password != confirm {
+            return Err(anyhow!("Passwords don't match"));
+        }
+        password
+    };
+
     // Save auth state
     let auth = AuthState {
         access_token: token,
@@ -50,7 +63,7 @@ async fn login_with_pat() -> Result<()> {
         expires_at: None,
         user_email: Some(user_email.clone()),
     };
-    auth.save()?;
+    auth.save(&master_password)?;
 
     println!(
         "\n{} Logged in as {}",
@@ -161,6 +174,19 @@ async fn login_with_oauth() -> Result<()> {
     // Get user info
     let user_email = validate_token(&tokens.access_token).await?;
 
+    // Prompt for master password
+    let master_password = if AuthState::exists() {
+        rpassword::prompt_password("Master password: ")?
+    } else {
+        println!("\nSet a master password to encrypt your credentials.");
+        let password = rpassword::prompt_password("New master password: ")?;
+        let confirm = rpassword::prompt_password("Confirm master password: ")?;
+        if password != confirm {
+            return Err(anyhow!("Passwords don't match"));
+        }
+        password
+    };
+
     // Save auth state
     let auth = AuthState {
         access_token: tokens.access_token,
@@ -169,7 +195,7 @@ async fn login_with_oauth() -> Result<()> {
         expires_at: tokens.expires_at,
         user_email: Some(user_email.clone()),
     };
-    auth.save()?;
+    auth.save(&master_password)?;
 
     println!(
         "\n{} Logged in as {}",

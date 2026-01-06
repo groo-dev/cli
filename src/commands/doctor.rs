@@ -9,7 +9,7 @@ use crate::auth::storage::AuthState;
 use crate::commands;
 use crate::discovery::ports::FrameworkType;
 use crate::discovery::{discover_services, discover_services_by_script, find_project_root};
-use crate::ops::{has_private_key, OpsConfig};
+use crate::ops::OpsConfig;
 use crate::project_config::ProjectConfig;
 
 const PRE_COMMIT_HOOK: &str = r#"#!/bin/sh
@@ -294,39 +294,29 @@ pub async fn run() -> Result<()> {
     }
 
     // 8. Check auth status
-    let auth = AuthState::load()?;
-    if auth.is_none() {
+    let is_authenticated = AuthState::exists();
+    if !is_authenticated {
         println!(
             "{} Not authenticated (run 'groo auth login')",
             style("!").yellow()
         );
         has_warnings = true;
     } else {
-        let email = auth
-            .as_ref()
-            .and_then(|a| a.user_email.as_ref())
-            .map(|e| e.as_str())
-            .unwrap_or("unknown");
-        println!("{} Authenticated as {}", style("✓").green(), email);
+        println!(
+            "{} Auth credentials stored (use 'groo auth status' for details)",
+            style("✓").green()
+        );
     }
 
-    // 9. Check ops links + private keys
+    // 9. Check ops links (private key check requires master password)
     let ops_config = OpsConfig::load(&project_root)?;
     let mut unlinked_services: Vec<String> = Vec::new();
+    let mut linked_services: Vec<String> = Vec::new();
 
     for service_name in all_services.keys() {
         match ops_config.get_service(service_name) {
             Some(link) => {
-                // Linked - check for private key
-                if !has_private_key(&link.application_id) {
-                    println!(
-                        "{} Service '{}' linked to ops ({}) but missing private key",
-                        style("!").yellow(),
-                        service_name,
-                        link.application_name
-                    );
-                    has_warnings = true;
-                }
+                linked_services.push(format!("{} → {}", service_name, link.application_name));
             }
             None => {
                 unlinked_services.push(service_name.clone());
@@ -345,6 +335,14 @@ pub async fn run() -> Result<()> {
             );
         }
         has_errors = true;
+    }
+
+    // Note about private keys
+    if !linked_services.is_empty() && is_authenticated {
+        println!(
+            "{} Private key verification requires master password (use 'groo ops env list' to verify)",
+            style("·").dim()
+        );
     }
 
     // 10. Print services table
@@ -411,7 +409,7 @@ pub async fn run() -> Result<()> {
     }
 
     // Offer to fix ops links if any are missing (only if authenticated)
-    if !unlinked_services.is_empty() && auth.is_some() {
+    if !unlinked_services.is_empty() && is_authenticated {
         println!();
         if Confirm::new()
             .with_prompt("Set up ops for services?")

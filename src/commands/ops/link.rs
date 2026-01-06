@@ -4,17 +4,14 @@ use dialoguer::{Confirm, FuzzySelect, Input};
 use std::collections::HashSet;
 use std::path::Path;
 
-use crate::auth::storage::AuthState;
+use crate::auth::storage::load_auth_with_password;
 use crate::discovery::{discover_services, discover_services_by_script, find_project_root};
-use crate::ops::{
-    delete_private_key, generate_key_pair, has_private_key, store_private_key, OpsClient,
-    OpsConfig, ServiceLink,
-};
+use crate::ops::{generate_key_pair, OpsClient, OpsConfig, ServiceLink};
+use crate::pass::storage::PassStorage;
 
 /// Link a service to an ops application
 pub async fn run_link(service: Option<String>) -> Result<()> {
-    let auth = AuthState::load()?
-        .ok_or_else(|| anyhow!("Not authenticated. Run 'groo auth login' first."))?;
+    let (auth, master_password) = load_auth_with_password()?;
     let root = find_project_root()?;
 
     // Discover all services (dev, build, or lint)
@@ -40,7 +37,7 @@ pub async fn run_link(service: Option<String>) -> Result<()> {
     };
 
     // Get ops applications
-    let client = OpsClient::new(auth.access_token);
+    let client = OpsClient::new(auth.access_token.clone());
     let apps = client.list_apps().await?;
 
     if apps.is_empty() {
@@ -142,9 +139,11 @@ pub async fn run_link(service: Option<String>) -> Result<()> {
     config.set_service(service_name.clone(), link);
     config.save(&root)?;
 
-    // Store private key in keychain
+    // Store private key in pass vault
     if let Some(private_key) = key_pair.1 {
-        store_private_key(&app.id, &private_key)?;
+        println!("{}", style("Storing private key in vault...").dim());
+        let mut storage = PassStorage::unlock(&auth.access_token, &master_password).await?;
+        storage.set_ops_key(&app.id, &private_key).await?;
     }
 
     println!(
@@ -159,6 +158,7 @@ pub async fn run_link(service: Option<String>) -> Result<()> {
 
 /// Unlink a service from ops
 pub async fn run_unlink(service: Option<String>) -> Result<()> {
+    let (auth, master_password) = load_auth_with_password()?;
     let root = find_project_root()?;
     let mut config = OpsConfig::load(&root)?;
 
@@ -204,16 +204,18 @@ pub async fn run_unlink(service: Option<String>) -> Result<()> {
     config.remove_service(&service_name);
     config.save(&root)?;
 
-    // Optionally remove private key from keychain
-    if has_private_key(&link.application_id) {
+    // Optionally remove private key from vault
+    let storage = PassStorage::unlock(&auth.access_token, &master_password).await?;
+    if storage.has_ops_key(&link.application_id) {
         let remove_key = Confirm::new()
-            .with_prompt("Remove private key from keychain?")
+            .with_prompt("Remove private key from vault?")
             .default(false)
             .interact()?;
 
         if remove_key {
-            delete_private_key(&link.application_id)?;
-            println!("Private key removed from keychain.");
+            let mut storage = storage;
+            storage.delete_ops_key(&link.application_id).await?;
+            println!("Private key removed from vault.");
         }
     }
 
@@ -237,7 +239,7 @@ fn select_environment() -> Result<String> {
     Ok(envs[selection].to_string())
 }
 
-fn import_private_key(app_id: &str) -> Result<(Option<String>, Option<String>)> {
+fn import_private_key(_app_id: &str) -> Result<(Option<String>, Option<String>)> {
     println!("\nPaste your private key (base64-encoded PKCS8):");
     let private_key: String = Input::new().interact_text()?;
     let private_key = private_key.trim().to_string();
@@ -248,10 +250,11 @@ fn import_private_key(app_id: &str) -> Result<(Option<String>, Option<String>)> 
         .decode(&private_key)
         .context("Invalid base64 encoding")?;
 
-    // Store in keychain
-    store_private_key(app_id, &private_key)?;
-
-    println!("{} Private key imported and stored in keychain", style("✓").green());
+    // Key will be stored in vault by caller (run_link)
+    println!(
+        "{} Private key validated (will be stored in vault)",
+        style("✓").green()
+    );
 
     // We don't have the public key when importing, but that's OK
     // The server already has it

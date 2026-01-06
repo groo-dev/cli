@@ -3,14 +3,12 @@ use console::style;
 use std::io::Read;
 use std::path::PathBuf;
 
-use crate::auth::storage::AuthState;
+use crate::auth::storage::load_auth_with_password;
 use crate::pad::client::PadClient;
 
 pub async fn run(text: Option<String>, files: Vec<PathBuf>) -> Result<()> {
-    // Check auth
-    let auth = AuthState::load()?.ok_or_else(|| {
-        anyhow!("Not logged in. Run 'groo auth login' first.")
-    })?;
+    // Check auth (prompts for master password)
+    let (auth, _master_password) = load_auth_with_password()?;
 
     // Get text from argument or stdin
     let text_content = get_text_content(text)?;
@@ -23,8 +21,8 @@ pub async fn run(text: Option<String>, files: Vec<PathBuf>) -> Result<()> {
     // Resolve file paths (globs, folders)
     let resolved_files = resolve_files(&files)?;
 
-    // Prompt for encryption password
-    let password = rpassword::prompt_password("Encryption password: ")?;
+    // Prompt for pad encryption password
+    let password = rpassword::prompt_password("Pad encryption password: ")?;
 
     let client = PadClient::new(auth.access_token);
 

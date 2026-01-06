@@ -1,42 +1,37 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use console::style;
-use dialoguer::{Confirm, Password};
+use dialoguer::Confirm;
 use keyring::Entry;
 use uuid::Uuid;
 
-use crate::auth::storage::AuthState;
+use crate::auth::storage::load_auth_with_password;
 use crate::discovery::find_project_root;
 use crate::ops::OpsConfig;
 use crate::pass::client::PassClient;
 use crate::pass::types::{NoteItem, VaultItem};
 
 const SERVICE_NAME: &str = "groo-cli";
-const CLI_AUTH_NOTE: &str = "groo-cli:auth";
 const CLI_OPS_PREFIX: &str = "groo-cli:ops:";
 
 pub async fn run() -> Result<()> {
     println!("{}", style("Groo CLI Secret Migration").bold());
     println!();
-    println!("This will migrate your CLI secrets from macOS Keychain to Groo Pass.");
-    println!("After migration, you can use your master password instead of system password.");
+    println!("This will migrate your ops private keys from macOS Keychain to Groo Pass.");
+    println!("(Note: Auth tokens are now stored locally encrypted with your master password)");
     println!();
 
-    // Check if auth exists in keychain
-    let auth_in_keychain = check_auth_in_keychain();
+    // Find ops keys in keychain
     let ops_keys = find_ops_keys();
 
-    if !auth_in_keychain && ops_keys.is_empty() {
-        println!("{} No secrets found in keychain to migrate.", style("!").yellow());
+    if ops_keys.is_empty() {
+        println!("{} No ops keys found in keychain to migrate.", style("!").yellow());
         return Ok(());
     }
 
     // Show what will be migrated
     println!("Found secrets to migrate:");
-    if auth_in_keychain {
-        println!("  {} Auth token (groo-cli/auth)", style("•").dim());
-    }
     for (app_id, app_name) in &ops_keys {
         println!(
             "  {} Ops key for {} ({})",
@@ -57,15 +52,8 @@ pub async fn run() -> Result<()> {
         return Ok(());
     }
 
-    // Need auth token to access pass API
-    let auth = AuthState::load()?.ok_or_else(|| {
-        anyhow!("Not logged in. Run 'groo auth login' first.")
-    })?;
-
-    // Prompt for master password
-    let master_password = Password::new()
-        .with_prompt("Pass master password")
-        .interact()?;
+    // Check auth (prompts for master password)
+    let (auth, master_password) = load_auth_with_password()?;
 
     println!("{}", style("Unlocking vault...").dim());
 
@@ -74,28 +62,6 @@ pub async fn run() -> Result<()> {
     let (mut vault, key, version) = client.unlock(&master_password).await?;
 
     let mut migrated_count = 0;
-
-    // Migrate auth
-    if auth_in_keychain {
-        if let Some(auth_json) = read_auth_from_keychain()? {
-            // Check if already exists in vault
-            let exists = vault.items.iter().any(|item| {
-                matches!(item, VaultItem::Note(n) if n.name == CLI_AUTH_NOTE && n.deleted_at.is_none())
-            });
-
-            if exists {
-                println!(
-                    "  {} Auth token already exists in vault, skipping",
-                    style("⚠").yellow()
-                );
-            } else {
-                let note = create_note(CLI_AUTH_NOTE, &auth_json);
-                vault.items.push(VaultItem::Note(note));
-                migrated_count += 1;
-                println!("  {} Auth token", style("✓").green());
-            }
-        }
-    }
 
     // Migrate ops keys
     for (app_id, app_name) in &ops_keys {
@@ -142,17 +108,11 @@ pub async fn run() -> Result<()> {
     // Ask to delete from keychain
     println!();
     if Confirm::new()
-        .with_prompt("Delete migrated secrets from Keychain?")
+        .with_prompt("Delete migrated ops keys from Keychain?")
         .default(false)
         .interact()?
     {
         let mut deleted = 0;
-
-        if auth_in_keychain {
-            if delete_auth_from_keychain().is_ok() {
-                deleted += 1;
-            }
-        }
 
         for (app_id, _) in &ops_keys {
             if delete_ops_key_from_keychain(app_id).is_ok() {
@@ -161,7 +121,7 @@ pub async fn run() -> Result<()> {
         }
 
         println!(
-            "{} Deleted {} secret(s) from Keychain",
+            "{} Deleted {} key(s) from Keychain",
             style("✓").green(),
             deleted
         );
@@ -173,29 +133,6 @@ pub async fn run() -> Result<()> {
         style("Migration complete! Your secrets are now stored in Groo Pass.").green()
     );
 
-    Ok(())
-}
-
-fn check_auth_in_keychain() -> bool {
-    Entry::new(SERVICE_NAME, "auth")
-        .and_then(|e| e.get_password())
-        .is_ok()
-}
-
-fn read_auth_from_keychain() -> Result<Option<String>> {
-    match Entry::new(SERVICE_NAME, "auth") {
-        Ok(entry) => match entry.get_password() {
-            Ok(json) => Ok(Some(json)),
-            Err(keyring::Error::NoEntry) => Ok(None),
-            Err(e) => Err(anyhow!("Keychain error: {}", e)),
-        },
-        Err(_) => Ok(None),
-    }
-}
-
-fn delete_auth_from_keychain() -> Result<()> {
-    let entry = Entry::new(SERVICE_NAME, "auth")?;
-    entry.delete_credential()?;
     Ok(())
 }
 

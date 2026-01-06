@@ -5,16 +5,14 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::auth::storage::AuthState;
+use crate::auth::storage::load_auth_with_password;
 use crate::discovery::{discover_services, discover_services_by_script, find_project_root, Service};
-use crate::ops::{
-    decrypt_secret, encrypt_secret, get_private_key, ConfigType, CreateConfigRequest, OpsClient,
-    OpsConfig,
-};
+use crate::ops::{decrypt_secret, encrypt_secret, ConfigType, CreateConfigRequest, OpsClient, OpsConfig};
+use crate::pass::storage::PassStorage;
 
 /// List env vars and secrets for a linked service
 pub async fn run_list(service: Option<String>, environment: String) -> Result<()> {
-    let (client, config, service_name, _root) = setup(service).await?;
+    let (client, config, service_name, _root, storage) = setup(service).await?;
 
     let link = config
         .get_service(&service_name)
@@ -47,7 +45,7 @@ pub async fn run_list(service: Option<String>, environment: String) -> Result<()
     if !resp.secrets.is_empty() {
         println!("{}", style("Secrets:").bold());
 
-        let private_key = get_private_key(&link.application_id).ok();
+        let private_key = storage.get_ops_key(&link.application_id);
 
         for secret in &resp.secrets {
             let value = if let Some(ref pk) = private_key {
@@ -68,7 +66,7 @@ pub async fn run_list(service: Option<String>, environment: String) -> Result<()
 
 /// Show diff between local env file and remote config
 pub async fn run_diff(service: Option<String>, environment: String) -> Result<()> {
-    let (client, config, service_name, root) = setup(service).await?;
+    let (client, config, service_name, root, storage) = setup(service).await?;
 
     let link = config
         .get_service(&service_name)
@@ -84,7 +82,7 @@ pub async fn run_diff(service: Option<String>, environment: String) -> Result<()
 
     // Get remote config
     let resp = client.get_config(&link.application_id, &environment).await?;
-    let private_key = get_private_key(&link.application_id).ok();
+    let private_key = storage.get_ops_key(&link.application_id);
 
     // Build remote map
     let mut remote: HashMap<String, (String, bool)> = HashMap::new();
@@ -166,7 +164,7 @@ pub async fn run_diff(service: Option<String>, environment: String) -> Result<()
 
 /// Pull remote config to local env file
 pub async fn run_pull(service: Option<String>, environment: String) -> Result<()> {
-    let (client, config, service_name, root) = setup(service).await?;
+    let (client, config, service_name, root, storage) = setup(service).await?;
 
     let link = config
         .get_service(&service_name)
@@ -180,7 +178,7 @@ pub async fn run_pull(service: Option<String>, environment: String) -> Result<()
 
     // Get remote config
     let resp = client.get_config(&link.application_id, &environment).await?;
-    let private_key = get_private_key(&link.application_id).ok();
+    let private_key = storage.get_ops_key(&link.application_id);
 
     // Build env file content
     let mut lines: Vec<String> = Vec::new();
@@ -247,7 +245,7 @@ pub async fn run_pull(service: Option<String>, environment: String) -> Result<()
 
 /// Push local env file to remote
 pub async fn run_push(service: Option<String>, environment: String) -> Result<()> {
-    let (client, config, service_name, root) = setup(service).await?;
+    let (client, config, service_name, root, _storage) = setup(service).await?;
 
     let link = config
         .get_service(&service_name)
@@ -387,9 +385,8 @@ pub async fn run_push(service: Option<String>, environment: String) -> Result<()
 /// Setup common state for env commands
 async fn setup(
     service: Option<String>,
-) -> Result<(OpsClient, OpsConfig, String, PathBuf)> {
-    let auth = AuthState::load()?
-        .ok_or_else(|| anyhow!("Not authenticated. Run 'groo auth login' first."))?;
+) -> Result<(OpsClient, OpsConfig, String, PathBuf, PassStorage)> {
+    let (auth, master_password) = load_auth_with_password()?;
     let root = find_project_root()?;
     let config = OpsConfig::load(&root)?;
 
@@ -420,9 +417,13 @@ async fn setup(
         }
     };
 
-    let client = OpsClient::new(auth.access_token);
+    let client = OpsClient::new(auth.access_token.clone());
 
-    Ok((client, config, service_name, root))
+    // Unlock pass vault for key access
+    println!("{}", style("Unlocking vault...").dim());
+    let storage = PassStorage::unlock(&auth.access_token, &master_password).await?;
+
+    Ok((client, config, service_name, root, storage))
 }
 
 /// Detect which env file to use based on service type

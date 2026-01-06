@@ -6,7 +6,7 @@ use dialoguer::{Confirm, Input, Password, Select};
 use rand::Rng;
 use uuid::Uuid;
 
-use crate::auth::storage::AuthState;
+use crate::auth::storage::load_auth_with_password;
 use crate::pass::client::PassClient;
 use crate::pass::types::{
     BankAccountItem, BankAccountType, CardItem, NoteItem, PasswordItem, TotpAlgorithm,
@@ -19,9 +19,8 @@ const NUMBERS: &str = "0123456789";
 const SYMBOLS: &str = "!@#$%^&*()_+-=[]{}|;:,.<>?";
 
 pub async fn run() -> Result<()> {
-    // Check auth
-    let auth = AuthState::load()?
-        .ok_or_else(|| anyhow!("Not logged in. Run 'groo auth login' first."))?;
+    // Check auth (prompts for master password)
+    let (auth, master_password) = load_auth_with_password()?;
 
     // Select item type
     let item_types = vec!["Password", "Note", "Card", "Bank Account"];
@@ -31,16 +30,11 @@ pub async fn run() -> Result<()> {
         .default(0)
         .interact()?;
 
-    // Prompt for master password
-    let password = Password::new()
-        .with_prompt("Master password")
-        .interact()?;
-
     println!("{}", style("Unlocking vault...").dim());
 
     // Unlock vault
     let client = PassClient::new(auth.access_token);
-    let (mut vault, key, version) = client.unlock(&password).await?;
+    let (mut vault, key, version) = client.unlock(&master_password).await?;
 
     // Create item based on type
     let item = match selection {
