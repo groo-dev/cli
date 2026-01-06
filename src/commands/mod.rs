@@ -8,6 +8,7 @@ pub mod logs;
 pub mod open;
 pub mod ops;
 pub mod pad;
+pub mod pass;
 pub mod restart;
 pub mod status;
 pub mod stop;

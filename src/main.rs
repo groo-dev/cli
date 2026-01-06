@@ -5,6 +5,7 @@ mod dev_tui;
 mod discovery;
 mod ops;
 mod pad;
+mod pass;
 mod project_config;
 mod runner;
 mod state;
@@ -92,6 +93,11 @@ enum Commands {
     Ops {
         #[command(subcommand)]
         command: OpsCommands,
+    },
+    /// Password manager
+    Pass {
+        #[command(subcommand)]
+        command: Option<PassCommands>,
     },
 }
 
@@ -184,6 +190,58 @@ enum OpsEnvCommands {
     },
 }
 
+#[derive(Subcommand)]
+enum PassCommands {
+    /// Search and copy a password
+    Get {
+        /// Search query (name, username, or URL)
+        query: String,
+        /// Copy username instead of password
+        #[arg(short, long)]
+        username: bool,
+        /// Copy TOTP code
+        #[arg(short, long)]
+        totp: bool,
+        /// Print to stdout instead of clipboard
+        #[arg(short, long)]
+        show: bool,
+    },
+    /// Add a new password item
+    Add,
+    /// Migrate secrets from Keychain to Pass
+    Migrate,
+    /// Generate a password
+    Generate {
+        /// Password length
+        #[arg(short, long, default_value = "20")]
+        length: usize,
+        /// Exclude uppercase letters
+        #[arg(long)]
+        no_uppercase: bool,
+        /// Exclude lowercase letters
+        #[arg(long)]
+        no_lowercase: bool,
+        /// Exclude numbers
+        #[arg(long)]
+        no_numbers: bool,
+        /// Exclude symbols
+        #[arg(long)]
+        no_symbols: bool,
+        /// Generate passphrase instead
+        #[arg(long)]
+        passphrase: bool,
+        /// Word count for passphrase
+        #[arg(long, default_value = "4")]
+        words: usize,
+        /// Separator for passphrase
+        #[arg(long, default_value = "-")]
+        separator: String,
+        /// Print instead of copy to clipboard
+        #[arg(short, long)]
+        print: bool,
+    },
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -231,6 +289,41 @@ async fn main() -> Result<()> {
                     commands::ops::env::run_push(service, env).await
                 }
             },
+        },
+        Commands::Pass { command } => match command {
+            None => commands::pass::list::run().await,
+            Some(PassCommands::Get {
+                query,
+                username,
+                totp,
+                show,
+            }) => commands::pass::get::run(&query, username, totp, show).await,
+            Some(PassCommands::Add) => commands::pass::add::run().await,
+            Some(PassCommands::Migrate) => commands::pass::migrate::run().await,
+            Some(PassCommands::Generate {
+                length,
+                no_uppercase,
+                no_lowercase,
+                no_numbers,
+                no_symbols,
+                passphrase,
+                words,
+                separator,
+                print,
+            }) => {
+                commands::pass::generate::run(
+                    length,
+                    no_uppercase,
+                    no_lowercase,
+                    no_numbers,
+                    no_symbols,
+                    passphrase,
+                    words,
+                    &separator,
+                    print,
+                )
+                .await
+            }
         },
     }
 }
