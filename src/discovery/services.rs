@@ -183,14 +183,12 @@ fn is_orchestrator_script(dev_command: &str) -> bool {
 }
 
 fn detect_framework(dev_command: &str, service_dir: &Path) -> FrameworkType {
-    // Check for wrangler
-    if dev_command.contains("wrangler") {
-        return FrameworkType::Wrangler;
-    }
+    // Prioritize dev command detection over config files
+    // (a project may have wrangler.toml for deployment but use vite for dev)
 
-    // Check for wrangler config files
-    if service_dir.join("wrangler.jsonc").exists() || service_dir.join("wrangler.toml").exists() {
-        return FrameworkType::Wrangler;
+    // Check for Vite in command first
+    if dev_command.contains("vite") {
+        return FrameworkType::Vite;
     }
 
     // Check for Next.js
@@ -198,9 +196,22 @@ fn detect_framework(dev_command: &str, service_dir: &Path) -> FrameworkType {
         return FrameworkType::NextJs;
     }
 
-    // Check for Vite
-    if dev_command.contains("vite") || service_dir.join("vite.config.ts").exists() || service_dir.join("vite.config.js").exists() {
+    // Check for wrangler in command
+    if dev_command.contains("wrangler") {
+        return FrameworkType::Wrangler;
+    }
+
+    // Fall back to config file detection
+    if service_dir.join("vite.config.ts").exists()
+        || service_dir.join("vite.config.js").exists()
+        || service_dir.join("vite.config.mts").exists()
+        || service_dir.join("vite.config.mjs").exists()
+    {
         return FrameworkType::Vite;
+    }
+
+    if service_dir.join("wrangler.jsonc").exists() || service_dir.join("wrangler.toml").exists() {
+        return FrameworkType::Wrangler;
     }
 
     FrameworkType::Unknown
