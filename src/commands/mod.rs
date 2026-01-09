@@ -12,3 +12,4 @@ pub mod pass;
 pub mod restart;
 pub mod status;
 pub mod stop;
+pub mod tasks;

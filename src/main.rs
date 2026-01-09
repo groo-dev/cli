@@ -9,6 +9,7 @@ mod pass;
 mod project_config;
 mod runner;
 mod state;
+mod tasks;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
@@ -98,6 +99,11 @@ enum Commands {
     Pass {
         #[command(subcommand)]
         command: Option<PassCommands>,
+    },
+    /// Task tracking
+    Tasks {
+        #[command(subcommand)]
+        command: TasksCommands,
     },
 }
 
@@ -242,6 +248,71 @@ enum PassCommands {
     },
 }
 
+#[derive(Subcommand)]
+enum TasksCommands {
+    /// Add a new task
+    Add {
+        /// Task title
+        title: String,
+        /// Project name (auto-detected from directory if not specified)
+        #[arg(short, long)]
+        project: Option<String>,
+        /// Priority: low, medium, high
+        #[arg(long)]
+        priority: Option<String>,
+        /// Tags (comma-separated)
+        #[arg(long, value_delimiter = ',')]
+        tags: Option<Vec<String>>,
+        /// Task description
+        #[arg(short, long)]
+        description: Option<String>,
+    },
+    /// List tasks
+    List {
+        /// Filter by project (auto-detected from directory if not specified)
+        #[arg(short, long)]
+        project: Option<String>,
+        /// Filter by status: backlog, open, in_progress, done, archived
+        #[arg(short, long)]
+        status: Option<String>,
+        /// Include archived tasks
+        #[arg(short, long)]
+        all: bool,
+    },
+    /// Search tasks
+    Search {
+        /// Search query
+        query: String,
+    },
+    /// Show task details
+    Show {
+        /// Task ID
+        id: String,
+    },
+    /// Start a task (set to in_progress)
+    Start {
+        /// Task ID
+        id: String,
+    },
+    /// Complete a task (set to done)
+    Done {
+        /// Task ID
+        id: String,
+    },
+    /// Archive a task
+    Archive {
+        /// Task ID
+        id: String,
+    },
+    /// Add a comment to a task
+    Comment {
+        /// Task ID
+        id: String,
+        /// Comment content
+        content: String,
+    },
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -323,6 +394,28 @@ async fn main() -> Result<()> {
                     print,
                 )
                 .await
+            }
+        },
+        Commands::Tasks { command } => match command {
+            TasksCommands::Add {
+                title,
+                project,
+                priority,
+                tags,
+                description,
+            } => commands::tasks::add::run(title, project, priority, tags, description).await,
+            TasksCommands::List {
+                project,
+                status,
+                all,
+            } => commands::tasks::list::run(project, status, all).await,
+            TasksCommands::Search { query } => commands::tasks::search::run(query).await,
+            TasksCommands::Show { id } => commands::tasks::show::run(id).await,
+            TasksCommands::Start { id } => commands::tasks::start::run(id).await,
+            TasksCommands::Done { id } => commands::tasks::done::run(id).await,
+            TasksCommands::Archive { id } => commands::tasks::archive::run(id).await,
+            TasksCommands::Comment { id, content } => {
+                commands::tasks::comment::run(id, content).await
             }
         },
     }
