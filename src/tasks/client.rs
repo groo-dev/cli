@@ -1,7 +1,27 @@
 use anyhow::{Context, Result};
 use reqwest::Client;
+use std::fmt;
 
 use super::types::*;
+
+#[derive(Debug)]
+pub enum CreateTaskError {
+    ProjectNotFound(String),
+    Api(String),
+    Network(String),
+}
+
+impl fmt::Display for CreateTaskError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CreateTaskError::ProjectNotFound(name) => write!(f, "Project not found: {}", name),
+            CreateTaskError::Api(msg) => write!(f, "{}", msg),
+            CreateTaskError::Network(msg) => write!(f, "Network error: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for CreateTaskError {}
 
 const TASKS_API_URL: &str = "https://tasks.groo.dev";
 #[allow(dead_code)]
@@ -74,7 +94,6 @@ impl TasksClient {
     }
 
     /// Create a new project
-    #[allow(dead_code)]
     pub async fn create_project(&self, request: CreateProjectRequest) -> Result<Project> {
         let response = self
             .client
@@ -180,8 +199,8 @@ impl TasksClient {
         response.json().await.context("Failed to parse task")
     }
 
-    /// Create a new task
-    pub async fn create_task(&self, request: CreateTaskRequest) -> Result<Task> {
+    /// Create a new task - returns Err with CreateTaskError for special handling
+    pub async fn create_task(&self, request: CreateTaskRequest) -> Result<Task, CreateTaskError> {
         let response = self
             .client
             .post(format!("{}/v1/tasks", self.base_url))
@@ -189,14 +208,22 @@ impl TasksClient {
             .json(&request)
             .send()
             .await
-            .context("Failed to create task")?;
+            .map_err(|e| CreateTaskError::Network(e.to_string()))?;
 
         if !response.status().is_success() {
-            let error: ErrorResponse = response.json().await?;
-            anyhow::bail!("{}", error.error);
+            let error: ErrorResponse = response.json().await
+                .map_err(|e| CreateTaskError::Network(e.to_string()))?;
+
+            if error.code == "PROJECT_NOT_FOUND" {
+                return Err(CreateTaskError::ProjectNotFound(
+                    error.project_name.unwrap_or_default()
+                ));
+            }
+            return Err(CreateTaskError::Api(error.error));
         }
 
-        let data: TaskResponse = response.json().await?;
+        let data: TaskResponse = response.json().await
+            .map_err(|e| CreateTaskError::Network(e.to_string()))?;
         Ok(data.task)
     }
 

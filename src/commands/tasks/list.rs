@@ -14,11 +14,11 @@ pub async fn run(
     let (auth, _) = load_auth_with_password()?;
     let client = TasksClient::new(auth.access_token);
 
-    // Get projects for display
+    // Get projects for display and project resolution
     let projects = client.list_projects().await?;
 
     // Resolve project from arg or directory
-    let resolved = resolve_project(&client, project.clone()).await?;
+    let resolved = resolve_project(&projects, project.as_deref());
     let project_id = resolved.as_ref().map(|p| p.id.as_str());
 
     // Fetch tasks

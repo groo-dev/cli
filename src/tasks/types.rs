@@ -129,18 +129,19 @@ pub struct SuccessResponse {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ErrorResponse {
     pub error: String,
-    #[allow(dead_code)]
     pub code: String,
+    pub project_name: Option<String>,
 }
 
 // Request types
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateTaskRequest {
-    pub project_id: String,
+    pub project_name: String,
     pub title: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,

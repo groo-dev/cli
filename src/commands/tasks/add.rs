@@ -1,11 +1,10 @@
 use anyhow::Result;
 use console::style;
-use dialoguer::FuzzySelect;
+use dialoguer::Confirm;
 
 use crate::auth::storage::load_auth_with_password;
-use crate::tasks::{CreateTaskRequest, TasksClient};
-
-use super::resolve_project;
+use crate::discovery::find_project_root;
+use crate::tasks::{CreateProjectRequest, CreateTaskError, CreateTaskRequest, TasksClient};
 
 pub async fn run(
     title: String,
@@ -17,37 +16,23 @@ pub async fn run(
     let (auth, _) = load_auth_with_password()?;
     let client = TasksClient::new(auth.access_token);
 
-    // Get projects
-    let projects = client.list_projects().await?;
-
-    if projects.is_empty() {
-        println!(
-            "{} No projects found. Create projects at {}",
-            style("!").yellow(),
-            style("https://tasks.groo.dev").cyan()
-        );
-        return Ok(());
-    }
-
-    // Resolve project from arg or directory
-    let resolved = resolve_project(&client, project.clone()).await?;
-
-    let selected_project = match resolved {
-        Some(p) => p,
+    // Determine project name from arg or current directory
+    let project_name = match project {
+        Some(name) => name,
         None => {
-            // Interactive selection
-            let names: Vec<&str> = projects.iter().map(|p| p.name.as_str()).collect();
-            let selection = FuzzySelect::new()
-                .with_prompt("Select project")
-                .items(&names)
-                .interact()?;
-            projects[selection].clone()
+            // Try to detect from current directory
+            let root = find_project_root()?;
+            let dir_name = root
+                .file_name()
+                .and_then(|n| n.to_str())
+                .ok_or_else(|| anyhow::anyhow!("Could not determine project name from directory"))?;
+            dir_name.to_string()
         }
     };
 
-    // Create the task
+    // Create the task request
     let request = CreateTaskRequest {
-        project_id: selected_project.id.clone(),
+        project_name: project_name.clone(),
         title: title.clone(),
         description,
         status: None,
@@ -55,15 +40,62 @@ pub async fn run(
         tags,
     };
 
-    let task = client.create_task(request).await?;
+    // Try to create the task
+    match client.create_task(request.clone()).await {
+        Ok(task) => {
+            println!(
+                "{} Created task in {}: {}",
+                style("✓").green(),
+                style(&project_name).cyan(),
+                style(&task.title).bold()
+            );
+            println!("  ID: {}", style(&task.id).dim());
+            Ok(())
+        }
+        Err(CreateTaskError::ProjectNotFound(name)) => {
+            // Project doesn't exist, prompt to create it
+            println!(
+                "{} Project {} not found.",
+                style("!").yellow(),
+                style(&name).cyan()
+            );
 
-    println!(
-        "{} Created task in {}: {}",
-        style("✓").green(),
-        style(&selected_project.name).cyan(),
-        style(&task.title).bold()
-    );
-    println!("  ID: {}", style(&task.id).dim());
+            let create = Confirm::new()
+                .with_prompt(format!("Create project '{}'?", name))
+                .default(true)
+                .interact()?;
 
-    Ok(())
+            if create {
+                // Create the project
+                let project = client
+                    .create_project(CreateProjectRequest {
+                        name: name.clone(),
+                        description: None,
+                    })
+                    .await?;
+
+                println!(
+                    "{} Created project: {}",
+                    style("✓").green(),
+                    style(&project.name).cyan()
+                );
+
+                // Retry creating the task
+                let task = client.create_task(request).await.map_err(|e| anyhow::anyhow!("{}", e))?;
+
+                println!(
+                    "{} Created task in {}: {}",
+                    style("✓").green(),
+                    style(&project_name).cyan(),
+                    style(&task.title).bold()
+                );
+                println!("  ID: {}", style(&task.id).dim());
+                Ok(())
+            } else {
+                println!("Cancelled.");
+                Ok(())
+            }
+        }
+        Err(e) => Err(anyhow::anyhow!("{}", e)),
+    }
 }
