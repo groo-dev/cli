@@ -120,7 +120,7 @@ impl TasksClient {
     /// List tasks with optional filters
     pub async fn list_tasks(
         &self,
-        project_id: Option<&str>,
+        project_name: Option<&str>,
         status: Option<&str>,
         priority: Option<&str>,
         include_archived: bool,
@@ -128,8 +128,8 @@ impl TasksClient {
         let mut url = format!("{}/v1/tasks", self.base_url);
         let mut params = Vec::new();
 
-        if let Some(p) = project_id {
-            params.push(format!("project={}", p));
+        if let Some(name) = project_name {
+            params.push(format!("projectName={}", urlencoding::encode(name)));
         }
         if let Some(s) = status {
             params.push(format!("status={}", s));

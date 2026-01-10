@@ -12,27 +12,15 @@ use console::style;
 use dialoguer::FuzzySelect;
 
 use crate::discovery::find_project_root;
-use crate::tasks::{Project, Task, TasksClient};
-
-/// Get project from argument or detect from directory
-pub fn resolve_project(projects: &[Project], project_arg: Option<&str>) -> Option<Project> {
-    match project_arg {
-        Some(name) => projects.iter().find(|p| p.name == name).cloned(),
-        None => detect_project_from_dir(projects),
-    }
-}
-
-/// Try to detect project from current directory by matching against user's projects
-fn detect_project_from_dir(projects: &[Project]) -> Option<Project> {
-    let root = find_project_root().ok()?;
-    let dir_name = root.file_name()?.to_str()?;
-    projects.iter().find(|p| p.name == dir_name).cloned()
-}
+use crate::tasks::{Task, TasksClient};
 
 /// Resolve a task ID from a prefix - shows interactive selection if ambiguous
 pub async fn resolve_task_id(client: &TasksClient, id_prefix: &str) -> Result<String> {
-    // Fetch all tasks and filter by prefix
-    let tasks = client.list_tasks(None, None, None, true).await?;
+    // Get project name from current directory
+    let project_name = detect_project_name();
+
+    // Fetch tasks for this project and filter by prefix
+    let tasks = client.list_tasks(project_name.as_deref(), None, None, true).await?;
     let matches: Vec<&Task> = tasks
         .iter()
         .filter(|t| t.id.starts_with(id_prefix))
@@ -62,4 +50,11 @@ pub async fn resolve_task_id(client: &TasksClient, id_prefix: &str) -> Result<St
             Ok(matches[selection].id.clone())
         }
     }
+}
+
+/// Detect project name from current directory
+fn detect_project_name() -> Option<String> {
+    let root = find_project_root().ok()?;
+    let dir_name = root.file_name()?.to_str()?;
+    Some(dir_name.to_string())
 }
