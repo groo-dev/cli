@@ -49,7 +49,7 @@ pub async fn run(query: String) -> Result<()> {
             style(project_display).cyan(),
             task.title,
             priority_badge,
-            style(&task.id[..8]).dim()
+            style(&task.id).dim()
         );
 
         // Show description snippet if available

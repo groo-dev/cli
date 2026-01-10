@@ -22,7 +22,7 @@ pub async fn run(id: String, content: String) -> Result<()> {
     println!(
         "{} Added comment to task {}",
         style("✓").green(),
-        style(&task_id[..8]).dim()
+        style(&task_id).dim()
     );
     println!("  {}", style(&comment.content).dim());
 

@@ -39,7 +39,7 @@ pub async fn resolve_task_id(client: &TasksClient, id_prefix: &str) -> Result<St
 
             let items: Vec<String> = matches
                 .iter()
-                .map(|t| format!("{} - {}", &t.id[..8], t.title))
+                .map(|t| format!("{} - {}", &t.id, t.title))
                 .collect();
 
             let selection = FuzzySelect::new()

@@ -60,7 +60,7 @@ pub async fn run(
             status_icon,
             task.title,
             priority_badge,
-            style(&task.id[..8]).dim()
+            style(&task.id).dim()
         );
     }
 
