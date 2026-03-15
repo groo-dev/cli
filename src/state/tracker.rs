@@ -66,6 +66,7 @@ impl State {
         );
     }
 
+    #[allow(dead_code)]
     pub fn remove_project(&mut self, project_name: &str) {
         self.projects.remove(project_name);
     }

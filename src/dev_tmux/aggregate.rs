@@ -26,8 +26,8 @@ pub async fn run(project: &str) -> Result<()> {
     let mut handles = Vec::new();
     loop {
         // Discover log files
-        if logs_dir.exists() {
-            if let Ok(entries) = std::fs::read_dir(&logs_dir) {
+        if logs_dir.exists()
+            && let Ok(entries) = std::fs::read_dir(&logs_dir) {
                 let mut new_files: Vec<_> = entries
                     .flatten()
                     .map(|e| e.path())
@@ -58,7 +58,6 @@ pub async fn run(project: &str) -> Result<()> {
                     handles.push(handle);
                 }
             }
-        }
 
         // Check if shutdown was requested
         let mut check_rx = shutdown_tx.subscribe();

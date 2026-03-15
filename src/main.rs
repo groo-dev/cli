@@ -1,7 +1,7 @@
 mod auth;
 mod commands;
 mod config;
-mod dev_tui;
+mod dev_tmux;
 mod discovery;
 mod ops;
 mod pad;
@@ -9,6 +9,7 @@ mod pass;
 mod project_config;
 mod runner;
 mod state;
+mod log_tailer;
 mod tasks;
 
 use anyhow::{Context, Result};
@@ -31,7 +32,14 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Start dev servers interactively
-    Dev,
+    Dev {
+        /// Internal: run aggregate log view
+        #[arg(long, hide = true)]
+        aggregate: bool,
+        /// Internal: project name for aggregate mode
+        #[arg(long, hide = true)]
+        project: Option<String>,
+    },
     /// Build services
     Build {
         /// Build all services without prompting
@@ -324,7 +332,14 @@ async fn main() -> Result<()> {
     }
 
     match cli.command {
-        Commands::Dev => commands::dev::run().await,
+        Commands::Dev { aggregate, project } => {
+            if aggregate {
+                let project = project.unwrap_or_else(|| "unknown".to_string());
+                dev_tmux::run_aggregate(&project).await
+            } else {
+                commands::dev::run().await
+            }
+        }
         Commands::Build { all, changed } => commands::build::run(all, changed).await,
         Commands::Lint { all, changed } => commands::lint::run(all, changed).await,
         Commands::Restart => commands::restart::run().await,

@@ -20,11 +20,10 @@ pub async fn run(
     let session = format!("groo-{}", project_name);
 
     // Handle existing session
-    if tmux::session_exists(&session) {
-        if !handle_existing_session(&session)? {
+    if tmux::session_exists(&session)
+        && !handle_existing_session(&session)? {
             return Ok(());
         }
-    }
 
     // Ensure log directory exists
     config::ensure_project_logs_dir(&project_name)?;

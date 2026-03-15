@@ -3,7 +3,7 @@ use console::{style, Style, Term};
 use dialoguer::{theme::ColorfulTheme, Confirm, MultiSelect};
 
 use crate::commands::stop::{get_pids_by_port, kill_process};
-use crate::dev_tui;
+use crate::dev_tmux;
 use crate::discovery::{discover_services, find_project_root, get_project_name, Service};
 use crate::project_config::ProjectConfig;
 use crate::state::{is_port_in_use, State};
@@ -174,13 +174,8 @@ pub async fn run() -> Result<()> {
         );
     }
 
-    // Launch TUI with selected services
-    dev_tui::run(project_name.clone(), git_root.clone(), selected_services).await?;
-
-    // Clean up state on exit
-    let mut state = State::load().unwrap_or_default();
-    state.remove_project(&project_name);
-    state.save()?;
+    // Launch tmux session with selected services
+    dev_tmux::run(project_name.clone(), git_root.clone(), selected_services).await?;
 
     Ok(())
 }
