@@ -165,7 +165,6 @@ pub fn kill_window(session: &str, window: &str) -> Result<()> {
 }
 
 /// Respawn a dead window (re-runs the original command)
-#[allow(dead_code)]
 pub fn respawn_window(session: &str, window: &str) -> Result<()> {
     let target = format!("{}:{}", session, window);
     let status = Command::new("tmux")

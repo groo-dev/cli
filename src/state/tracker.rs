@@ -92,7 +92,6 @@ impl State {
         }
     }
 
-    #[allow(dead_code)]
     pub fn get_tmux_session(&self, project_name: &str) -> Option<&str> {
         self.projects
             .get(project_name)

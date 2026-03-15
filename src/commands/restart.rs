@@ -114,10 +114,35 @@ pub async fn run() -> Result<()> {
     state.clean_stale_pids();
     state.save()?;
 
+    // Check if services are managed by tmux
+    let tmux_session = state.get_tmux_session(&project_name).map(|s| s.to_string());
+
+    if let Some(session) = tmux_session
+        && crate::dev_tmux::tmux::session_exists(&session)
+    {
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+        println!(
+            "\n{} Respawning {} service(s) in tmux...\n",
+            style("→").green().bold(),
+            selected_services.len()
+        );
+
+        for service in &selected_services {
+            match crate::dev_tmux::tmux::respawn_window(&session, &service.name) {
+                Ok(()) => println!("  {} Restarted {}", style("✓").green(), service.name),
+                Err(e) => eprintln!("  {} Failed to restart {}: {}", style("✗").red(), service.name, e),
+            }
+        }
+
+        println!("\n{} Done.", style("✓").green().bold());
+        return Ok(());
+    }
+
     // Brief pause to allow ports to be released
     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
-    // Start selected services
+    // Start selected services (fallback for non-tmux)
     println!(
         "\n{} Starting {} service(s)...\n",
         style("→").green().bold(),
