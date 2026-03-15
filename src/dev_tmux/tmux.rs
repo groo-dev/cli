@@ -86,6 +86,15 @@ pub fn set_option(session: &str, option: &str, value: &str) -> Result<()> {
     Ok(())
 }
 
+/// Set a session-scoped tmux window option
+pub fn set_window_option(session: &str, option: &str, value: &str) -> Result<()> {
+    Command::new("tmux")
+        .args(["set-window-option", "-t", session, option, value])
+        .status()
+        .context(format!("Failed to set tmux window option {} = {}", option, value))?;
+    Ok(())
+}
+
 /// Bind a key (prefix key + key → tmux command)
 pub fn bind_key(key: &str, args: &[&str]) -> Result<()> {
     let mut cmd_args = vec!["bind-key", key];

@@ -115,11 +115,11 @@ fn configure_session(session: &str, service_count: usize) -> Result<()> {
     tmux::set_option(session, "focus-events", "on")?;
 
     // Keep service names — don't let tmux rename to the running process
-    tmux::set_option(session, "allow-rename", "off")?;
-    tmux::set_option(session, "automatic-rename", "off")?;
+    tmux::set_window_option(session, "allow-rename", "off")?;
+    tmux::set_window_option(session, "automatic-rename", "off")?;
 
     // Highlight windows with new output
-    tmux::set_option(session, "monitor-activity", "on")?;
+    tmux::set_window_option(session, "monitor-activity", "on")?;
     tmux::set_option(session, "visual-activity", "off")?; // highlight only, no message
 
     // -- Status bar layout --
@@ -143,24 +143,24 @@ fn configure_session(session: &str, service_count: usize) -> Result<()> {
     tmux::set_option(session, "status-right-length", "40")?;
 
     // Window tabs: inactive
-    tmux::set_option(
+    tmux::set_window_option(
         session,
         "window-status-format",
         " #[fg=#6c7086]#W ",
     )?;
 
     // Window tabs: active (colored pill)
-    tmux::set_option(
+    tmux::set_window_option(
         session,
         "window-status-current-format",
         "#[fg=#1e1e2e,bg=#89b4fa,bold] #W #[default]",
     )?;
 
     // Window tabs: activity (yellow text)
-    tmux::set_option(session, "window-status-activity-style", "fg=#f9e2af,bg=default,none")?;
+    tmux::set_window_option(session, "window-status-activity-style", "fg=#f9e2af,bg=default,none")?;
 
     // Separator between windows
-    tmux::set_option(session, "window-status-separator", "")?;
+    tmux::set_window_option(session, "window-status-separator", "")?;
 
     // Message and command prompt styling
     tmux::set_option(session, "message-style", "bg=#313244,fg=#cdd6f4")?;
