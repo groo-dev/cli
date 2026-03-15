@@ -129,7 +129,8 @@ pub async fn run() -> Result<()> {
         );
 
         for service in &selected_services {
-            match crate::dev_tmux::tmux::respawn_window(&session, &service.name) {
+            let window_name = service.name.replace(['.', ':'], "-");
+            match crate::dev_tmux::tmux::respawn_window(&session, &window_name) {
                 Ok(()) => println!("  {} Restarted {}", style("✓").green(), service.name),
                 Err(e) => eprintln!("  {} Failed to restart {}: {}", style("✗").red(), service.name, e),
             }

@@ -9,6 +9,12 @@ use crate::config;
 use crate::discovery::Service;
 use crate::state::State;
 
+/// Sanitize a name for use in tmux targets.
+/// Dots are pane separators, colons are window separators in tmux's target syntax.
+fn sanitize_tmux_name(name: &str) -> String {
+    name.replace(['.', ':'], "-")
+}
+
 /// Run the dev TUI via tmux session
 pub async fn run(
     project_name: String,
@@ -17,7 +23,7 @@ pub async fn run(
 ) -> Result<()> {
     tmux::check_tmux()?;
 
-    let session = format!("groo-{}", project_name);
+    let session = format!("groo-{}", sanitize_tmux_name(&project_name));
 
     // Handle existing session
     if tmux::session_exists(&session)
@@ -50,16 +56,17 @@ pub async fn run(
 
     // Create one window per service
     for service in &services {
+        let window_name = sanitize_tmux_name(&service.name);
         let cmd = format!(
             "cd {} && {}",
             service.path.display(),
             service.dev_command
         );
-        tmux::new_window(&session, &service.name, &cmd)?;
+        tmux::new_window(&session, &window_name, &cmd)?;
 
         // Set up log capture via pipe-pane (ANSI-stripped)
         let log_file = config::get_service_log_file(&project_name, &service.name);
-        tmux::pipe_pane(&session, &service.name, &log_file.display().to_string())?;
+        tmux::pipe_pane(&session, &window_name, &log_file.display().to_string())?;
     }
 
     // Style the status bar
@@ -71,7 +78,8 @@ pub async fn run(
     // Save state
     let mut state = State::load().unwrap_or_default();
     for service in &services {
-        let pid = tmux::get_pane_pid(&session, &service.name).unwrap_or(0);
+        let window_name = sanitize_tmux_name(&service.name);
+        let pid = tmux::get_pane_pid(&session, &window_name).unwrap_or(0);
         state.add_service(
             &project_name,
             git_root.clone(),
