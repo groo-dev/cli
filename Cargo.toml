@@ -47,12 +47,10 @@ http = "1.2"
 chrono = "0.4"
 uuid = { version = "1.19", features = ["v4"] }
 
-# TUI
+# TUI (used by pass and pad)
 ratatui = "0.30"
 crossterm = "0.29"
 arboard = "3.6"
-sysinfo = "0.32"
-nix = { version = "0.30", features = ["signal", "process"] }
 
 # Ops encryption (RSA-OAEP + AES-GCM hybrid)
 rsa = { version = "0.9", features = ["sha2"] }
