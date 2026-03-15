@@ -1,0 +1,193 @@
+use anyhow::{bail, Context, Result};
+use std::process::Command;
+
+/// Check if tmux is installed and meets minimum version
+pub fn check_tmux() -> Result<()> {
+    let output = Command::new("tmux")
+        .arg("-V")
+        .output()
+        .context("tmux is required for groo dev. Install with: brew install tmux")?;
+
+    if !output.status.success() {
+        bail!("tmux is required for groo dev. Install with: brew install tmux");
+    }
+
+    let version_str = String::from_utf8_lossy(&output.stdout);
+    let version = version_str
+        .trim()
+        .strip_prefix("tmux ")
+        .unwrap_or("")
+        .split('.')
+        .next()
+        .and_then(|v| v.parse::<u32>().ok())
+        .unwrap_or(0);
+
+    if version < 3 {
+        bail!(
+            "tmux >= 3.0 required (found {}). Update with: brew upgrade tmux",
+            version_str.trim()
+        );
+    }
+
+    Ok(())
+}
+
+/// Check if a tmux session exists
+pub fn session_exists(session: &str) -> bool {
+    Command::new("tmux")
+        .args(["has-session", "-t", session])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+/// Create a new tmux session (detached) with the first window
+pub fn new_session(session: &str, window_name: &str, command: &str) -> Result<()> {
+    let status = Command::new("tmux")
+        .args([
+            "new-session", "-d",
+            "-s", session,
+            "-n", window_name,
+            command,
+        ])
+        .status()
+        .context("Failed to create tmux session")?;
+
+    if !status.success() {
+        bail!("Failed to create tmux session '{}'", session);
+    }
+    Ok(())
+}
+
+/// Add a new window to an existing session
+pub fn new_window(session: &str, window_name: &str, command: &str) -> Result<()> {
+    let status = Command::new("tmux")
+        .args([
+            "new-window",
+            "-t", session,
+            "-n", window_name,
+            command,
+        ])
+        .status()
+        .context("Failed to create tmux window")?;
+
+    if !status.success() {
+        bail!("Failed to create window '{}' in session '{}'", window_name, session);
+    }
+    Ok(())
+}
+
+/// Set a session-scoped tmux option
+pub fn set_option(session: &str, option: &str, value: &str) -> Result<()> {
+    Command::new("tmux")
+        .args(["set-option", "-t", session, option, value])
+        .status()
+        .context(format!("Failed to set tmux option {} = {}", option, value))?;
+    Ok(())
+}
+
+/// Set up the pipe-pane for a window to capture output to a log file (ANSI-stripped)
+pub fn pipe_pane(session: &str, window: &str, log_file: &str) -> Result<()> {
+    let target = format!("{}:{}", session, window);
+    let pipe_cmd = format!(
+        "sed 's/\\x1b\\[[0-9;]*[a-zA-Z]//g' >> {}",
+        log_file
+    );
+    Command::new("tmux")
+        .args(["pipe-pane", "-t", &target, &pipe_cmd])
+        .status()
+        .context("Failed to set up pipe-pane")?;
+    Ok(())
+}
+
+/// Get the pane PID for a window
+pub fn get_pane_pid(session: &str, window: &str) -> Option<u32> {
+    let target = format!("{}:{}", session, window);
+    let output = Command::new("tmux")
+        .args(["display-message", "-t", &target, "-p", "#{pane_pid}"])
+        .output()
+        .ok()?;
+
+    if output.status.success() {
+        String::from_utf8_lossy(&output.stdout)
+            .trim()
+            .parse()
+            .ok()
+    } else {
+        None
+    }
+}
+
+/// Attach to a session (blocks until detach)
+pub fn attach_session(session: &str) -> Result<()> {
+    let status = Command::new("tmux")
+        .args(["attach-session", "-t", session])
+        .status()
+        .context("Failed to attach to tmux session")?;
+
+    if !status.success() {
+        bail!("tmux attach exited with error");
+    }
+    Ok(())
+}
+
+/// Switch client to a session (when already inside tmux)
+pub fn switch_client(session: &str) -> Result<()> {
+    let status = Command::new("tmux")
+        .args(["switch-client", "-t", session])
+        .status()
+        .context("Failed to switch tmux client")?;
+
+    if !status.success() {
+        bail!("tmux switch-client exited with error");
+    }
+    Ok(())
+}
+
+/// Kill a tmux session
+pub fn kill_session(session: &str) -> Result<()> {
+    Command::new("tmux")
+        .args(["kill-session", "-t", session])
+        .status()
+        .context("Failed to kill tmux session")?;
+    Ok(())
+}
+
+/// Kill a specific window in a session
+pub fn kill_window(session: &str, window: &str) -> Result<()> {
+    let target = format!("{}:{}", session, window);
+    Command::new("tmux")
+        .args(["kill-window", "-t", &target])
+        .status()
+        .context("Failed to kill tmux window")?;
+    Ok(())
+}
+
+/// Respawn a dead window (re-runs the original command)
+pub fn respawn_window(session: &str, window: &str) -> Result<()> {
+    let target = format!("{}:{}", session, window);
+    let status = Command::new("tmux")
+        .args(["respawn-window", "-t", &target])
+        .status()
+        .context("Failed to respawn tmux window")?;
+
+    if !status.success() {
+        bail!("Failed to respawn window '{}'", target);
+    }
+    Ok(())
+}
+
+/// Select (focus) a specific window
+pub fn select_window(session: &str, window: &str) -> Result<()> {
+    let target = format!("{}:{}", session, window);
+    Command::new("tmux")
+        .args(["select-window", "-t", &target])
+        .status()
+        .context("Failed to select tmux window")?;
+    Ok(())
+}
+
+/// Check if we're currently inside a tmux session
+pub fn is_inside_tmux() -> bool {
+    std::env::var("TMUX").is_ok()
+}
