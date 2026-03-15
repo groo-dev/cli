@@ -106,7 +106,7 @@ fn get_service_name(git_root: &Path, service_dir: &Path) -> String {
         .ok()
         .and_then(|p| p.to_str())
         .filter(|s| !s.is_empty())
-        .map(|s| s.replace('/', ":"))
+        .map(|s| s.replace('/', "-"))
         .unwrap_or_else(|| {
             service_dir
                 .file_name()
@@ -162,7 +162,7 @@ fn parse_npm_service(git_root: &Path, service_dir: &Path, package_path: &Path, s
     Ok(Some(Service {
         name,
         path: service_dir.to_path_buf(),
-        dev_command: script_command,
+        dev_command: format!("npm run {}", script),
         framework,
         port,
     }))
