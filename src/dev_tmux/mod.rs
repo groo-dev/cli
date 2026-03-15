@@ -35,6 +35,9 @@ pub fn run(
     let first_cmd = format!("cd {} && {}", first.path.display(), first.dev_command);
     tmux::new_session(&session, &first_window, &first_cmd)?;
 
+    // Set remain-on-exit immediately so windows stay open even if a service exits quickly
+    tmux::set_option(&session, "remain-on-exit", "on")?;
+
     // Create windows for remaining services
     for service in &services[1..] {
         let window_name = sanitize_tmux_name(&service.name);
@@ -44,9 +47,6 @@ pub fn run(
 
     // Style the status bar
     configure_status_bar(&session, services.len())?;
-
-    // Set remain-on-exit so crash output stays visible
-    tmux::set_option(&session, "remain-on-exit", "on")?;
 
     // Focus first window
     tmux::select_window(&session, &first_window)?;
