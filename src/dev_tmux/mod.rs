@@ -48,6 +48,9 @@ pub fn run(
         tmux::new_window(&session, &window_name, &cmd)?;
     }
 
+    // Enable mouse support (scroll, click to select window/pane)
+    tmux::set_option(&session, "mouse", "on")?;
+
     // Style the status bar
     configure_status_bar(&session, services.len())?;
 
