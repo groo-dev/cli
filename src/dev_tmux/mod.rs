@@ -48,11 +48,8 @@ pub fn run(
         tmux::new_window(&session, &window_name, &cmd)?;
     }
 
-    // Enable mouse support (scroll, click to select window/pane)
-    tmux::set_option(&session, "mouse", "on")?;
-
-    // Style the status bar
-    configure_status_bar(&session, services.len())?;
+    // Configure session
+    configure_session(&session, services.len())?;
 
     // Focus first window
     tmux::select_window(&session, &first_window)?;
@@ -107,17 +104,63 @@ fn handle_existing_session(session: &str) -> Result<bool> {
     }
 }
 
-/// Configure the tmux status bar with groo styling
-fn configure_status_bar(session: &str, service_count: usize) -> Result<()> {
-    tmux::set_option(session, "status-style", "bg=colour236,fg=colour248")?;
-    tmux::set_option(session, "window-status-current-style", "bg=colour239,fg=colour223,bold")?;
-    tmux::set_option(session, "window-status-style", "fg=colour246")?;
+/// Configure all tmux session settings
+fn configure_session(session: &str, service_count: usize) -> Result<()> {
+    // -- Behavior --
+    tmux::set_option(session, "mouse", "on")?;
+    tmux::set_option(session, "history-limit", "50000")?;
+    tmux::set_option(session, "escape-time", "0")?;
+    tmux::set_option(session, "renumber-windows", "on")?;
+    tmux::set_option(session, "default-terminal", "screen-256color")?;
+    tmux::set_option(session, "focus-events", "on")?;
 
-    let right = format!(" {} services ", service_count);
+    // Keep service names — don't let tmux rename to the running process
+    tmux::set_option(session, "allow-rename", "off")?;
+    tmux::set_option(session, "automatic-rename", "off")?;
+
+    // Highlight windows with new output
+    tmux::set_option(session, "monitor-activity", "on")?;
+    tmux::set_option(session, "visual-activity", "off")?; // highlight only, no message
+
+    // -- Status bar layout --
+    tmux::set_option(session, "status-position", "bottom")?;
+    tmux::set_option(session, "status-justify", "left")?;
+    tmux::set_option(session, "status-interval", "1")?;
+
+    // Status bar background
+    tmux::set_option(session, "status-style", "bg=#1e1e2e,fg=#6c7086")?;
+
+    // Left: session name
+    tmux::set_option(session, "status-left", " #[fg=#cdd6f4,bold]#S #[fg=#45475a]│ ")?;
+    tmux::set_option(session, "status-left-length", "30")?;
+
+    // Right: service count
+    let right = format!("#[fg=#6c7086] {} services ", service_count);
     tmux::set_option(session, "status-right", &right)?;
-    tmux::set_option(session, "status-left", " [#S] ")?;
-    tmux::set_option(session, "status-left-length", "20")?;
     tmux::set_option(session, "status-right-length", "20")?;
+
+    // Window tabs: inactive
+    tmux::set_option(
+        session,
+        "window-status-format",
+        " #[fg=#6c7086]#W ",
+    )?;
+
+    // Window tabs: active (colored pill)
+    tmux::set_option(
+        session,
+        "window-status-current-format",
+        "#[fg=#1e1e2e,bg=#89b4fa,bold] #W #[default]",
+    )?;
+
+    // Window tabs: activity (yellow text)
+    tmux::set_option(session, "window-status-activity-style", "fg=#f9e2af,bg=default,none")?;
+
+    // Separator between windows
+    tmux::set_option(session, "window-status-separator", "")?;
+
+    // Message and command prompt styling
+    tmux::set_option(session, "message-style", "bg=#313244,fg=#cdd6f4")?;
 
     Ok(())
 }
