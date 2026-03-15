@@ -25,12 +25,6 @@ pub fn run(project: Option<String>) -> Result<()> {
     let git_root = find_project_root()?;
     let project_name = project.unwrap_or_else(|| get_project_name(&git_root));
 
-    // Capture tmux session name before clean_stale_pids removes the project
-    let tmux_session = {
-        let state = State::load().unwrap_or_default();
-        state.get_tmux_session(&project_name).map(|s| s.to_string())
-    };
-
     let services = discover_services(&git_root)?;
 
     // Filter to only running services (port-based detection)
@@ -138,13 +132,6 @@ pub fn run(project: Option<String>) -> Result<()> {
         "\n{} Done.",
         style("✓").green().bold()
     );
-
-    // Kill tmux session if present
-    if let Some(session) = &tmux_session
-        && crate::dev_tmux::tmux::session_exists(session)
-    {
-        crate::dev_tmux::tmux::kill_session(session).ok();
-    }
 
     Ok(())
 }

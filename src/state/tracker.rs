@@ -15,8 +15,6 @@ pub struct ServiceState {
 pub struct ProjectState {
     pub path: PathBuf,
     pub services: HashMap<String, ServiceState>,
-    #[serde(default)]
-    pub tmux_session: Option<String>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -43,6 +41,7 @@ impl State {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn add_service(
         &mut self,
         project_name: &str,
@@ -57,7 +56,6 @@ impl State {
             .or_insert_with(|| ProjectState {
                 path: project_path,
                 services: HashMap::new(),
-                tmux_session: None,
             });
 
         project.services.insert(
@@ -81,21 +79,9 @@ impl State {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_project(&self, project_name: &str) -> Option<&ProjectState> {
         self.projects.get(project_name)
-    }
-
-    #[allow(dead_code)]
-    pub fn set_tmux_session(&mut self, project_name: &str, session: &str) {
-        if let Some(project) = self.projects.get_mut(project_name) {
-            project.tmux_session = Some(session.to_string());
-        }
-    }
-
-    pub fn get_tmux_session(&self, project_name: &str) -> Option<&str> {
-        self.projects
-            .get(project_name)
-            .and_then(|p| p.tmux_session.as_deref())
     }
 
     pub fn clean_stale_pids(&mut self) {
@@ -110,15 +96,12 @@ impl State {
 
 /// Check if a service is running by port (preferred) or PID fallback
 pub fn is_service_running(port: Option<u16>, pid: u32) -> bool {
-    // If we have a port, check if it's in use (more reliable)
     if let Some(p) = port {
         return is_port_in_use(p);
     }
-    // Fall back to PID check
     is_pid_running(pid)
 }
 
-/// Check if a port is in use (using lsof for reliability)
 #[cfg(unix)]
 pub fn is_port_in_use(port: u16) -> bool {
     use std::process::Command;

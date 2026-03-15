@@ -175,7 +175,7 @@ pub async fn run() -> Result<()> {
     }
 
     // Launch tmux session with selected services
-    dev_tmux::run(project_name.clone(), git_root.clone(), selected_services).await?;
+    dev_tmux::run(project_name.clone(), git_root.clone(), selected_services)?;
 
     Ok(())
 }

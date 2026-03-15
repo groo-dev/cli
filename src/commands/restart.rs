@@ -1,12 +1,9 @@
 use anyhow::Result;
 use console::{style, Style, Term};
 use dialoguer::{theme::ColorfulTheme, MultiSelect};
-use tokio::sync::broadcast;
 
-use crate::config::get_service_log_file;
-use crate::discovery::{discover_services, find_project_root, get_project_name, Service};
-use crate::runner::{get_color_for_index, spawn_service, wait_for_processes, ProcessHandle};
-use crate::state::{is_port_in_use, State};
+use crate::discovery::{discover_services, find_project_root, Service};
+use crate::state::is_port_in_use;
 
 fn create_theme() -> ColorfulTheme {
     ColorfulTheme {
@@ -26,16 +23,14 @@ fn create_theme() -> ColorfulTheme {
 
 pub async fn run() -> Result<()> {
     let git_root = find_project_root()?;
-    let project_name = get_project_name(&git_root);
     let services = discover_services(&git_root)?;
 
-    // Filter to only running services (port-based detection)
-    let running_service_list: Vec<&Service> = services
+    let running_services: Vec<&Service> = services
         .iter()
         .filter(|s| s.port.map(is_port_in_use).unwrap_or(false))
         .collect();
 
-    if running_service_list.is_empty() {
+    if running_services.is_empty() {
         println!(
             "{} No running services found. Use {} to start services.",
             style("!").yellow(),
@@ -44,11 +39,9 @@ pub async fn run() -> Result<()> {
         return Ok(());
     }
 
-    // Find max name length for alignment
-    let max_name_len = running_service_list.iter().map(|s| s.name.len()).max().unwrap_or(0);
+    let max_name_len = running_services.iter().map(|s| s.name.len()).max().unwrap_or(0);
 
-    // Display running services for selection
-    let items: Vec<String> = running_service_list
+    let items: Vec<String> = running_services
         .iter()
         .map(|s| {
             let port_str = s.port
@@ -63,8 +56,7 @@ pub async fn run() -> Result<()> {
         })
         .collect();
 
-    // All selected by default
-    let defaults: Vec<bool> = vec![true; running_service_list.len()];
+    let defaults: Vec<bool> = vec![true; running_services.len()];
 
     let theme = create_theme();
     let selections = MultiSelect::with_theme(&theme)
@@ -80,10 +72,9 @@ pub async fn run() -> Result<()> {
 
     let selected_services: Vec<_> = selections
         .iter()
-        .map(|&i| running_service_list[i])
+        .map(|&i| running_services[i])
         .collect();
 
-    // Stop selected services
     println!(
         "\n{} Stopping {} service(s)...\n",
         style("→").yellow().bold(),
@@ -94,132 +85,22 @@ pub async fn run() -> Result<()> {
         if let Some(port) = service.port
             && let Some(pid) = get_pid_by_port(port) {
                 if kill_process(pid) {
-                    println!(
-                        "  {} Stopped {}",
-                        style("✓").green(),
-                        service.name
-                    );
+                    println!("  {} Stopped {}", style("✓").green(), service.name);
                 } else {
-                    println!(
-                        "  {} Failed to stop {}",
-                        style("✗").red(),
-                        service.name
-                    );
+                    println!("  {} Failed to stop {}", style("✗").red(), service.name);
                 }
             }
     }
 
-    // Clean state
-    let mut state = State::load().unwrap_or_default();
-    state.clean_stale_pids();
-    state.save()?;
-
-    // Check if services are managed by tmux
-    let tmux_session = state.get_tmux_session(&project_name).map(|s| s.to_string());
-
-    if let Some(session) = tmux_session
-        && crate::dev_tmux::tmux::session_exists(&session)
-    {
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-
-        println!(
-            "\n{} Respawning {} service(s) in tmux...\n",
-            style("→").green().bold(),
-            selected_services.len()
-        );
-
-        for service in &selected_services {
-            let window_name = service.name.replace(['.', ':'], "-");
-            match crate::dev_tmux::tmux::respawn_window(&session, &window_name) {
-                Ok(()) => println!("  {} Restarted {}", style("✓").green(), service.name),
-                Err(e) => eprintln!("  {} Failed to restart {}: {}", style("✗").red(), service.name, e),
-            }
-        }
-
-        println!("\n{} Done.", style("✓").green().bold());
-        return Ok(());
-    }
-
-    // Brief pause to allow ports to be released
-    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-
-    // Start selected services (fallback for non-tmux)
     println!(
-        "\n{} Starting {} service(s)...\n",
-        style("→").green().bold(),
-        selected_services.len()
+        "\n{} Services stopped. Use {} to start them again.",
+        style("✓").green().bold(),
+        style("groo dev").cyan()
     );
-
-    // Set up shutdown signal
-    let (shutdown_tx, _) = broadcast::channel::<()>(1);
-
-    // Set up Ctrl+C handler
-    let shutdown_tx_clone = shutdown_tx.clone();
-    tokio::spawn(async move {
-        tokio::signal::ctrl_c().await.ok();
-        println!("\n{} Shutting down...", style("→").yellow().bold());
-        let _ = shutdown_tx_clone.send(());
-    });
-
-    // Reload state
-    let mut state = State::load().unwrap_or_default();
-
-    // Spawn all selected services
-    let mut handles: Vec<ProcessHandle> = Vec::new();
-    for (idx, service) in selected_services.iter().enumerate() {
-        let color = get_color_for_index(idx);
-        let log_file = get_service_log_file(&project_name, &service.name);
-
-        match spawn_service(
-            &service.name,
-            &service.path,
-            &service.dev_command,
-            color.clone(),
-            log_file,
-        )
-        .await
-        {
-            Ok(handle) => {
-                if let Some(pid) = handle.pid() {
-                    state.add_service(
-                        &project_name,
-                        git_root.clone(),
-                        &service.name,
-                        pid,
-                        service.port,
-                    );
-                }
-                handles.push(handle);
-            }
-            Err(e) => {
-                eprintln!(
-                    "{} Failed to start {}: {}",
-                    style("✗").red().bold(),
-                    service.name,
-                    e
-                );
-            }
-        }
-    }
-
-    // Save state
-    state.save()?;
-
-    // Wait for all processes or shutdown
-    let shutdown_rx = shutdown_tx.subscribe();
-    wait_for_processes(handles, shutdown_rx).await;
-
-    // Clean up state on exit
-    let mut state = State::load().unwrap_or_default();
-    for service in &selected_services {
-        state.remove_service(&project_name, &service.name);
-    }
-    state.save()?;
 
     Ok(())
 }
 
-/// Get PID of process listening on a port using lsof
 #[cfg(unix)]
 fn get_pid_by_port(port: u16) -> Option<u32> {
     use std::process::Command;
@@ -230,7 +111,6 @@ fn get_pid_by_port(port: u16) -> Option<u32> {
 
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
-        // lsof can return multiple PIDs, take the first one
         stdout.lines().next()?.trim().parse().ok()
     } else {
         None

@@ -86,38 +86,6 @@ pub fn set_option(session: &str, option: &str, value: &str) -> Result<()> {
     Ok(())
 }
 
-/// Set up the pipe-pane for a window to capture output to a log file (ANSI-stripped)
-pub fn pipe_pane(session: &str, window: &str, log_file: &str) -> Result<()> {
-    let target = format!("{}:{}", session, window);
-    let pipe_cmd = format!(
-        "sed 's/\\x1b\\[[0-9;]*[a-zA-Z]//g' >> '{}'",
-        log_file
-    );
-    Command::new("tmux")
-        .args(["pipe-pane", "-t", &target, &pipe_cmd])
-        .status()
-        .context("Failed to set up pipe-pane")?;
-    Ok(())
-}
-
-/// Get the pane PID for a window
-pub fn get_pane_pid(session: &str, window: &str) -> Option<u32> {
-    let target = format!("{}:{}", session, window);
-    let output = Command::new("tmux")
-        .args(["display-message", "-t", &target, "-p", "#{pane_pid}"])
-        .output()
-        .ok()?;
-
-    if output.status.success() {
-        String::from_utf8_lossy(&output.stdout)
-            .trim()
-            .parse()
-            .ok()
-    } else {
-        None
-    }
-}
-
 /// Attach to a session (blocks until detach)
 pub fn attach_session(session: &str) -> Result<()> {
     let status = Command::new("tmux")
@@ -150,31 +118,6 @@ pub fn kill_session(session: &str) -> Result<()> {
         .args(["kill-session", "-t", session])
         .status()
         .context("Failed to kill tmux session")?;
-    Ok(())
-}
-
-/// Kill a specific window in a session
-#[allow(dead_code)]
-pub fn kill_window(session: &str, window: &str) -> Result<()> {
-    let target = format!("{}:{}", session, window);
-    Command::new("tmux")
-        .args(["kill-window", "-t", &target])
-        .status()
-        .context("Failed to kill tmux window")?;
-    Ok(())
-}
-
-/// Respawn a dead window (re-runs the original command)
-pub fn respawn_window(session: &str, window: &str) -> Result<()> {
-    let target = format!("{}:{}", session, window);
-    let status = Command::new("tmux")
-        .args(["respawn-window", "-t", &target])
-        .status()
-        .context("Failed to respawn tmux window")?;
-
-    if !status.success() {
-        bail!("Failed to respawn window '{}'", target);
-    }
     Ok(())
 }
 

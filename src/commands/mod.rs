@@ -4,7 +4,6 @@ pub mod dev;
 pub mod doctor;
 pub mod lint;
 pub mod list;
-pub mod logs;
 pub mod open;
 pub mod ops;
 pub mod pad;

@@ -1,13 +1,10 @@
-mod aggregate;
 pub mod tmux;
 
 use anyhow::Result;
 use console::style;
 use std::path::PathBuf;
 
-use crate::config;
 use crate::discovery::Service;
-use crate::state::State;
 
 /// Sanitize a name for use in tmux targets.
 /// Dots are pane separators, colons are window separators in tmux's target syntax.
@@ -15,58 +12,34 @@ fn sanitize_tmux_name(name: &str) -> String {
     name.replace(['.', ':'], "-")
 }
 
-/// Run the dev TUI via tmux session
-pub async fn run(
-    project_name: String,
-    git_root: PathBuf,
+/// Run dev servers in a tmux session — one window per service
+pub fn run(
+    _project_name: String,
+    _git_root: PathBuf,
     services: Vec<Service>,
 ) -> Result<()> {
     tmux::check_tmux()?;
 
-    let session = format!("groo-{}", sanitize_tmux_name(&project_name));
+    let session = format!("groo-{}", sanitize_tmux_name(&_project_name));
 
     // Handle existing session
     if tmux::session_exists(&session)
-        && !handle_existing_session(&session)? {
-            return Ok(());
-        }
-
-    // Ensure log directory exists
-    config::ensure_project_logs_dir(&project_name)?;
-
-    // Truncate existing log files for fresh session
-    let logs_dir = config::get_project_logs_dir(&project_name);
-    for service in &services {
-        let log_file = logs_dir.join(format!("{}.log", service.name));
-        if log_file.exists() {
-            std::fs::write(&log_file, "")?;
-        }
+        && !handle_existing_session(&session)?
+    {
+        return Ok(());
     }
 
-    // Build the aggregate command for window 0
-    let groo_bin = std::env::current_exe()?;
-    let aggregate_cmd = format!(
-        "{} dev --aggregate --project {}",
-        groo_bin.display(),
-        project_name
-    );
+    // Create session with first service as window 0
+    let first = &services[0];
+    let first_window = sanitize_tmux_name(&first.name);
+    let first_cmd = format!("cd {} && {}", first.path.display(), first.dev_command);
+    tmux::new_session(&session, &first_window, &first_cmd)?;
 
-    // Create session with "all" window (window 0)
-    tmux::new_session(&session, "all", &aggregate_cmd)?;
-
-    // Create one window per service
-    for service in &services {
+    // Create windows for remaining services
+    for service in &services[1..] {
         let window_name = sanitize_tmux_name(&service.name);
-        let cmd = format!(
-            "cd {} && {}",
-            service.path.display(),
-            service.dev_command
-        );
+        let cmd = format!("cd {} && {}", service.path.display(), service.dev_command);
         tmux::new_window(&session, &window_name, &cmd)?;
-
-        // Set up log capture via pipe-pane (ANSI-stripped)
-        let log_file = config::get_service_log_file(&project_name, &service.name);
-        tmux::pipe_pane(&session, &window_name, &log_file.display().to_string())?;
     }
 
     // Style the status bar
@@ -75,24 +48,8 @@ pub async fn run(
     // Set remain-on-exit so crash output stays visible
     tmux::set_option(&session, "remain-on-exit", "on")?;
 
-    // Save state
-    let mut state = State::load().unwrap_or_default();
-    for service in &services {
-        let window_name = sanitize_tmux_name(&service.name);
-        let pid = tmux::get_pane_pid(&session, &window_name).unwrap_or(0);
-        state.add_service(
-            &project_name,
-            git_root.clone(),
-            &service.name,
-            pid,
-            service.port,
-        );
-    }
-    state.set_tmux_session(&project_name, &session);
-    state.save()?;
-
-    // Focus window 0 ("all")
-    tmux::select_window(&session, "all")?;
+    // Focus first window
+    tmux::select_window(&session, &first_window)?;
 
     // Attach (or switch if already inside tmux)
     println!(
@@ -157,9 +114,4 @@ fn configure_status_bar(session: &str, service_count: usize) -> Result<()> {
     tmux::set_option(session, "status-right-length", "20")?;
 
     Ok(())
-}
-
-/// Run the aggregate log tailer (called as hidden subcommand)
-pub async fn run_aggregate(project: &str) -> Result<()> {
-    aggregate::run(project).await
 }

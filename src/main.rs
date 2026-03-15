@@ -9,7 +9,6 @@ mod pass;
 mod project_config;
 mod runner;
 mod state;
-mod log_tailer;
 mod tasks;
 
 use anyhow::{Context, Result};
@@ -32,14 +31,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Start dev servers interactively
-    Dev {
-        /// Internal: run aggregate log view
-        #[arg(long, hide = true)]
-        aggregate: bool,
-        /// Internal: project name for aggregate mode
-        #[arg(long, hide = true)]
-        project: Option<String>,
-    },
+    Dev,
     /// Build services
     Build {
         /// Build all services without prompting
@@ -76,15 +68,6 @@ enum Commands {
     Stop {
         /// Project name (defaults to current directory)
         project: Option<String>,
-    },
-    /// View logs for running services
-    Logs {
-        /// Number of lines to show per service
-        #[arg(short = 'n', default_value = "10")]
-        lines: usize,
-        /// Follow log output
-        #[arg(short = 'f', long)]
-        follow: bool,
     },
     /// Check project configuration for issues
     Doctor,
@@ -332,14 +315,7 @@ async fn main() -> Result<()> {
     }
 
     match cli.command {
-        Commands::Dev { aggregate, project } => {
-            if aggregate {
-                let project = project.unwrap_or_else(|| "unknown".to_string());
-                dev_tmux::run_aggregate(&project).await
-            } else {
-                commands::dev::run().await
-            }
-        }
+        Commands::Dev => commands::dev::run().await,
         Commands::Build { all, changed } => commands::build::run(all, changed).await,
         Commands::Lint { all, changed } => commands::lint::run(all, changed).await,
         Commands::Restart => commands::restart::run().await,
@@ -347,7 +323,6 @@ async fn main() -> Result<()> {
         Commands::Status { project } => commands::status::run(project),
         Commands::Open { service } => commands::open::run(&service),
         Commands::Stop { project } => commands::stop::run(project),
-        Commands::Logs { lines, follow } => commands::logs::run(lines, follow).await,
         Commands::Doctor => commands::doctor::run().await,
         Commands::Auth { command } => match command {
             AuthCommands::Login { pat } => commands::auth::login::run(pat).await,
