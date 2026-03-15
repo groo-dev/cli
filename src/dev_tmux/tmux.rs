@@ -86,12 +86,22 @@ pub fn set_option(session: &str, option: &str, value: &str) -> Result<()> {
     Ok(())
 }
 
-/// Set a session-scoped tmux window option
-pub fn set_window_option(session: &str, option: &str, value: &str) -> Result<()> {
+/// Set a global tmux option
+#[allow(dead_code)]
+pub fn set_global_option(option: &str, value: &str) -> Result<()> {
     Command::new("tmux")
-        .args(["set-window-option", "-t", session, option, value])
+        .args(["set-option", "-g", option, value])
         .status()
-        .context(format!("Failed to set tmux window option {} = {}", option, value))?;
+        .context(format!("Failed to set global tmux option {} = {}", option, value))?;
+    Ok(())
+}
+
+/// Set a global tmux window option
+pub fn set_global_window_option(option: &str, value: &str) -> Result<()> {
+    Command::new("tmux")
+        .args(["set-window-option", "-g", option, value])
+        .status()
+        .context(format!("Failed to set global window option {} = {}", option, value))?;
     Ok(())
 }
 
