@@ -12,6 +12,12 @@ fn sanitize_tmux_name(name: &str) -> String {
     name.replace(['.', ':'], "-")
 }
 
+/// Build the shell command for a service window.
+/// Falls back to a shell prompt if the command exits, so the window stays alive.
+fn service_cmd(path: &std::path::Path, dev_command: &str) -> String {
+    format!("cd '{}' && {}; exec $SHELL", path.display(), dev_command)
+}
+
 /// Run dev servers in a tmux session — one window per service
 pub fn run(
     _project_name: String,
@@ -32,16 +38,13 @@ pub fn run(
     // Create session with first service as window 0
     let first = &services[0];
     let first_window = sanitize_tmux_name(&first.name);
-    let first_cmd = format!("cd {} && {}", first.path.display(), first.dev_command);
+    let first_cmd = service_cmd(&first.path, &first.dev_command);
     tmux::new_session(&session, &first_window, &first_cmd)?;
-
-    // Set remain-on-exit immediately so windows stay open even if a service exits quickly
-    tmux::set_option(&session, "remain-on-exit", "on")?;
 
     // Create windows for remaining services
     for service in &services[1..] {
         let window_name = sanitize_tmux_name(&service.name);
-        let cmd = format!("cd {} && {}", service.path.display(), service.dev_command);
+        let cmd = service_cmd(&service.path, &service.dev_command);
         tmux::new_window(&session, &window_name, &cmd)?;
     }
 
