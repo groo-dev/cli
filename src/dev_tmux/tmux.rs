@@ -90,7 +90,7 @@ pub fn set_option(session: &str, option: &str, value: &str) -> Result<()> {
 pub fn pipe_pane(session: &str, window: &str, log_file: &str) -> Result<()> {
     let target = format!("{}:{}", session, window);
     let pipe_cmd = format!(
-        "sed 's/\\x1b\\[[0-9;]*[a-zA-Z]//g' >> {}",
+        "sed 's/\\x1b\\[[0-9;]*[a-zA-Z]//g' >> '{}'",
         log_file
     );
     Command::new("tmux")
