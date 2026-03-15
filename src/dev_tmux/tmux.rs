@@ -86,6 +86,17 @@ pub fn set_option(session: &str, option: &str, value: &str) -> Result<()> {
     Ok(())
 }
 
+/// Bind a key (prefix key + key → tmux command)
+pub fn bind_key(key: &str, args: &[&str]) -> Result<()> {
+    let mut cmd_args = vec!["bind-key", key];
+    cmd_args.extend_from_slice(args);
+    Command::new("tmux")
+        .args(&cmd_args)
+        .status()
+        .context(format!("Failed to bind key {}", key))?;
+    Ok(())
+}
+
 /// Attach to a session (blocks until detach)
 pub fn attach_session(session: &str) -> Result<()> {
     let status = Command::new("tmux")

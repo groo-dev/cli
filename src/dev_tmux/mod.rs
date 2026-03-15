@@ -134,10 +134,13 @@ fn configure_session(session: &str, service_count: usize) -> Result<()> {
     tmux::set_option(session, "status-left", " #[fg=#cdd6f4,bold]#S #[fg=#45475a]│ ")?;
     tmux::set_option(session, "status-left-length", "30")?;
 
-    // Right: service count
-    let right = format!("#[fg=#6c7086] {} services ", service_count);
+    // Right: service count + quit hint
+    let right = format!(
+        "#[fg=#6c7086]{} services #[fg=#45475a]│ #[fg=#f38ba8]^b Q #[fg=#6c7086]quit ",
+        service_count
+    );
     tmux::set_option(session, "status-right", &right)?;
-    tmux::set_option(session, "status-right-length", "20")?;
+    tmux::set_option(session, "status-right-length", "40")?;
 
     // Window tabs: inactive
     tmux::set_option(
@@ -161,6 +164,10 @@ fn configure_session(session: &str, service_count: usize) -> Result<()> {
 
     // Message and command prompt styling
     tmux::set_option(session, "message-style", "bg=#313244,fg=#cdd6f4")?;
+
+    // -- Key bindings --
+    // Prefix + Q: kill session (with confirmation)
+    tmux::bind_key("Q", &["confirm-before", "-p", "Kill all services? (y/n)", "kill-session"])?;
 
     Ok(())
 }
