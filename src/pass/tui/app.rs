@@ -3,6 +3,7 @@ use std::time::Instant;
 use crate::pass::types::{Vault, VaultItem};
 
 #[derive(Debug, Clone, PartialEq)]
+#[allow(dead_code)]
 pub enum StatusType {
     Success,
     Error,
@@ -47,6 +48,7 @@ pub enum AppMode {
     Search(String),
 }
 
+#[allow(dead_code)]
 pub struct App {
     pub vault: Vault,
     pub key: [u8; 32],
@@ -161,11 +163,10 @@ impl App {
     }
 
     pub fn clear_status_if_expired(&mut self) {
-        if let Some((_, _, created)) = &self.status_message {
-            if created.elapsed().as_secs() >= 3 {
+        if let Some((_, _, created)) = &self.status_message
+            && created.elapsed().as_secs() >= 3 {
                 self.status_message = None;
             }
-        }
     }
 
     pub fn enter_search(&mut self) {
@@ -191,6 +192,7 @@ impl App {
         }
     }
 
+    #[allow(dead_code)]
     pub fn search_query(&self) -> Option<&str> {
         match &self.mode {
             AppMode::Search(q) => Some(q),

@@ -39,13 +39,11 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>, app: &mut
     loop {
         terminal.draw(|f| ui::render(f, app))?;
 
-        if event::poll(std::time::Duration::from_millis(100))? {
-            if let Event::Key(key) = event::read()? {
-                if events::handle_key(app, key.code)? {
+        if event::poll(std::time::Duration::from_millis(100))?
+            && let Event::Key(key) = event::read()?
+                && events::handle_key(app, key.code)? {
                     break;
                 }
-            }
-        }
 
         if app.should_quit {
             break;

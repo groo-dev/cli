@@ -44,8 +44,8 @@ pub async fn run(id: String) -> Result<()> {
         println!("  {} {}", style("Project:").dim(), style(&p.name).cyan());
     }
 
-    if let Some(tags) = &task.tags {
-        if !tags.is_empty() {
+    if let Some(tags) = &task.tags
+        && !tags.is_empty() {
             let tags_str = tags
                 .iter()
                 .map(|t| style(t).magenta().to_string())
@@ -53,7 +53,6 @@ pub async fn run(id: String) -> Result<()> {
                 .join(", ");
             println!("  {}    {}", style("Tags:").dim(), tags_str);
         }
-    }
 
     println!("  {}      {}", style("ID:").dim(), style(&task.id).dim());
     println!("  {} {}", style("Created:").dim(), style(&task.created_at).dim());

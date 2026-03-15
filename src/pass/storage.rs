@@ -109,13 +109,12 @@ impl PassStorage {
 
         // Find and soft-delete
         for item in &mut self.vault.items {
-            if let VaultItem::Note(note) = item {
-                if note.name == name && note.deleted_at.is_none() {
+            if let VaultItem::Note(note) = item
+                && note.name == name && note.deleted_at.is_none() {
                     note.deleted_at = Some(now);
                     note.updated_at = now;
                     break;
                 }
-            }
         }
 
         self.sync().await

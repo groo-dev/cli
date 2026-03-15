@@ -152,8 +152,8 @@ fn find_ops_keys() -> Vec<(String, String)> {
     let mut keys = Vec::new();
 
     // Try to find project root and load ops config
-    if let Ok(root) = find_project_root() {
-        if let Ok(config) = OpsConfig::load(&root) {
+    if let Ok(root) = find_project_root()
+        && let Ok(config) = OpsConfig::load(&root) {
             for link in config.services.values() {
                 // Check if key exists in keychain
                 if Entry::new(SERVICE_NAME, &format!("ops-{}", link.application_id))
@@ -164,7 +164,6 @@ fn find_ops_keys() -> Vec<(String, String)> {
                 }
             }
         }
-    }
 
     // Deduplicate by app_id
     keys.sort_by(|a, b| a.0.cmp(&b.0));

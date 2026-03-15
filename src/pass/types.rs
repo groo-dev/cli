@@ -20,6 +20,7 @@ pub struct VaultResponse {
     pub updated_at: i64,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VaultVersionResponse {
@@ -59,6 +60,7 @@ pub enum VaultItem {
 }
 
 impl VaultItem {
+    #[allow(dead_code)]
     pub fn id(&self) -> &str {
         match self {
             VaultItem::Password(item) => &item.id,

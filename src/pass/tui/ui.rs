@@ -152,15 +152,14 @@ fn render_preview(f: &mut Frame, area: Rect, app: &App) {
                     ]));
                 }
 
-                if let Some(ref notes) = p.notes {
-                    if !notes.is_empty() {
+                if let Some(ref notes) = p.notes
+                    && !notes.is_empty() {
                         lines.push(Line::from(""));
                         lines.push(Line::from(Span::styled("Notes:", Style::default().fg(Color::DarkGray))));
                         for line in notes.lines().take(5) {
                             lines.push(Line::from(format!("  {}", line)));
                         }
                     }
-                }
 
                 lines
             }
