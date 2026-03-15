@@ -142,7 +142,7 @@ pub async fn run() -> Result<()> {
     let mut handles: Vec<ProcessHandle> = Vec::new();
     for (idx, service) in selected_services.iter().enumerate() {
         let color = get_color_for_index(idx);
-        let log_file = get_service_log_file(&service.path);
+        let log_file = get_service_log_file(&project_name, &service.name);
 
         match spawn_service(
             &service.name,

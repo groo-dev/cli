@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use tokio::sync::broadcast;
 
 use crate::config::get_service_log_file;
-use crate::discovery::{discover_services, find_project_root, Service};
+use crate::discovery::{discover_services, find_project_root, get_project_name, Service};
 use crate::runner::get_color_for_index;
 use crate::state::is_port_in_use;
 
@@ -35,6 +35,7 @@ struct ServiceLogInfo {
 
 pub async fn run(lines: usize, follow: bool) -> Result<()> {
     let git_root = find_project_root()?;
+    let project_name = get_project_name(&git_root);
     let services = discover_services(&git_root)?;
 
     // Filter to only running services (port-based detection)
@@ -93,7 +94,7 @@ pub async fn run(lines: usize, follow: bool) -> Result<()> {
             let service = running_services[i];
             ServiceLogInfo {
                 name: service.name.clone(),
-                log_file: get_service_log_file(&service.path),
+                log_file: get_service_log_file(&project_name, &service.name),
                 color: get_color_for_index(i),
             }
         })

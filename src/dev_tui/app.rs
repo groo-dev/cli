@@ -316,7 +316,7 @@ impl App {
         let name = service.name.clone();
         let path = service.path.clone();
         let color = service.color;
-        let log_file = get_service_log_file(&path);
+        let log_file = get_service_log_file(&self.project_name, &name);
 
         // Spawn the process
         match spawn_service_with_channel(&name, &path, log_file, color, log_tx).await {

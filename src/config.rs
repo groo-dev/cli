@@ -26,21 +26,17 @@ pub fn get_logs_dir() -> PathBuf {
     get_config_dir().join("logs")
 }
 
-pub fn get_service_log_file(service_path: &std::path::Path) -> PathBuf {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
+pub fn get_project_logs_dir(project: &str) -> PathBuf {
+    get_logs_dir().join(project)
+}
 
-    let mut hasher = DefaultHasher::new();
-    service_path.hash(&mut hasher);
-    let hash = format!("{:x}", hasher.finish());
-    let short_hash = &hash[..8.min(hash.len())];
-
-    get_logs_dir().join(format!("{}.log", short_hash))
+pub fn get_service_log_file(project: &str, service_name: &str) -> PathBuf {
+    get_project_logs_dir(project).join(format!("{}.log", service_name))
 }
 
 #[allow(dead_code)]
-pub fn ensure_logs_dir() -> std::io::Result<()> {
-    let logs_dir = get_logs_dir();
+pub fn ensure_project_logs_dir(project: &str) -> std::io::Result<()> {
+    let logs_dir = get_project_logs_dir(project);
     if !logs_dir.exists() {
         std::fs::create_dir_all(&logs_dir)?;
     }
