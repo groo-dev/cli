@@ -57,6 +57,7 @@ pub enum VaultItem {
     Card(CardItem),
     BankAccount(BankAccountItem),
     File(FileItem),
+    CryptoWallet(CryptoWalletItem),
 }
 
 impl VaultItem {
@@ -69,6 +70,7 @@ impl VaultItem {
             VaultItem::Card(item) => &item.id,
             VaultItem::BankAccount(item) => &item.id,
             VaultItem::File(item) => &item.id,
+            VaultItem::CryptoWallet(item) => &item.id,
         }
     }
 
@@ -80,6 +82,7 @@ impl VaultItem {
             VaultItem::Card(item) => &item.name,
             VaultItem::BankAccount(item) => &item.name,
             VaultItem::File(item) => &item.name,
+            VaultItem::CryptoWallet(item) => &item.name,
         }
     }
 
@@ -91,6 +94,7 @@ impl VaultItem {
             VaultItem::Card(item) => item.deleted_at,
             VaultItem::BankAccount(item) => item.deleted_at,
             VaultItem::File(item) => item.deleted_at,
+            VaultItem::CryptoWallet(item) => item.deleted_at,
         }
     }
 
@@ -102,6 +106,7 @@ impl VaultItem {
             VaultItem::Card(_) => "💳",
             VaultItem::BankAccount(_) => "🏦",
             VaultItem::File(_) => "📎",
+            VaultItem::CryptoWallet(_) => "₿",
         }
     }
 
@@ -113,6 +118,7 @@ impl VaultItem {
             VaultItem::Card(_) => "Card",
             VaultItem::BankAccount(_) => "Bank Account",
             VaultItem::File(_) => "File",
+            VaultItem::CryptoWallet(_) => "Crypto Wallet",
         }
     }
 }
@@ -287,6 +293,36 @@ pub struct FileItem {
     pub mime_type: String,
     pub r2_key: String,
     pub encryption_iv: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub folder_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub favorite: Option<bool>,
+    pub created_at: i64,
+    pub updated_at: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deleted_at: Option<i64>,
+}
+
+// =============================================================================
+// Crypto Wallet Item
+// =============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CryptoWalletItem {
+    pub id: String,
+    pub name: String,
+    pub address: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub seed_phrase: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub private_key: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub public_key: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub derivation_path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub notes: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
