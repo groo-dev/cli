@@ -68,6 +68,18 @@ groo open <service>
 
 Opens the service URL in your default browser.
 
+### Scaffold a new project
+
+```bash
+groo launchpad --config launchpad.json
+```
+
+Scaffolds a complete multi-project repo from a JSON config — creates projects, installs dependencies, generates config files, sets up Cloudflare resources, writes project docs, and initializes git. Designed to be driven by the [launchpad skill](https://github.com/groo-dev/skills) which collects requirements conversationally and produces the config.
+
+```bash
+groo launchpad --config launchpad.json --clean  # Delete previous failed run and start fresh
+```
+
 ## Port Detection
 
 Ports are detected automatically based on framework:
