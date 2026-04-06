@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use super::config::{AuthProvider, EmailProvider, ProjectConfig, ProjectType};
 use super::ui::Ui;
 use anyhow::Result;

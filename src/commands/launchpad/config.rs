@@ -33,7 +33,6 @@ pub enum ProjectType {
 }
 
 impl ProjectType {
-    #[allow(dead_code)]
     pub fn label(&self) -> &str {
         match self {
             ProjectType::Web => "web app",
@@ -85,7 +84,6 @@ impl Resource {
 impl LaunchpadConfig {
     /// Derive the zone (root domain) from the application domain.
     /// e.g., "app.example.com" -> "example.com", "example.com" -> "example.com"
-    #[allow(dead_code)]
     pub fn zone(&self) -> Option<String> {
         self.domain.as_ref().map(|d| {
             let parts: Vec<&str> = d.split('.').collect();
@@ -97,12 +95,10 @@ impl LaunchpadConfig {
         })
     }
 
-    #[allow(dead_code)]
     pub fn has_api_worker(&self) -> bool {
         self.projects.iter().any(|p| p.project_type == ProjectType::ApiWorker)
     }
 
-    #[allow(dead_code)]
     pub fn api_worker_port(&self, ports: &[(String, u16)]) -> Option<u16> {
         self.projects.iter()
             .find(|p| p.project_type == ProjectType::ApiWorker)
@@ -111,12 +107,10 @@ impl LaunchpadConfig {
 }
 
 impl ProjectConfig {
-    #[allow(dead_code)]
     pub fn has_resource(&self, resource: &Resource) -> bool {
         self.resources.contains(resource)
     }
 
-    #[allow(dead_code)]
     pub fn is_worker(&self) -> bool {
         matches!(self.project_type, ProjectType::ApiWorker | ProjectType::LightweightWorker)
     }

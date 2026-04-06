@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use super::config::{LaunchpadConfig, ProjectType, Resource};
 use super::state::LaunchpadState;
 use super::ui::Ui;

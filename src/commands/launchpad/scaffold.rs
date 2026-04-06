@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use super::config::ProjectType;
 use super::ui::Ui;
 use anyhow::Result;

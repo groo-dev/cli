@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -89,6 +87,7 @@ impl LaunchpadState {
         });
     }
 
+    #[allow(dead_code)]
     pub fn mark_failed(&mut self, step: &str, project: Option<&str>, error: &str) {
         self.completed_steps.push(CompletedStep {
             step: step.to_string(),

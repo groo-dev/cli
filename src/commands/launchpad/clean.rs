@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use super::config::LaunchpadConfig;
 use super::resources;
 use super::state::LaunchpadState;

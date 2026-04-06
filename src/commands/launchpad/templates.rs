@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use super::config::{
     AuthProvider, EmailProvider, LaunchpadConfig, ProjectConfig, ProjectType, Resource,
 };
