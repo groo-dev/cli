@@ -676,13 +676,13 @@ fn step_bind_resource_ids(
             match resource.resource_type.as_str() {
                 "d1" => {
                     content = content.replace(
-                        "\"database_id\": \"\"",
+                        "\"database_id\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"",
                         &format!("\"database_id\": \"{}\"", resource.id),
                     );
                 }
                 "kv" => {
                     content = content.replace(
-                        "\"id\": \"\"",
+                        "\"id\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"",
                         &format!("\"id\": \"{}\"", resource.id),
                     );
                 }

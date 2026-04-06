@@ -4,6 +4,25 @@ use super::ui::Ui;
 use anyhow::Result;
 use std::path::Path;
 
+/// Returns "wrangler" if globally available, otherwise "npx wrangler"
+fn wrangler_cmd() -> &'static str {
+    use std::sync::OnceLock;
+    static CMD: OnceLock<&str> = OnceLock::new();
+    CMD.get_or_init(|| {
+        if std::process::Command::new("wrangler")
+            .arg("--version")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .is_ok_and(|s| s.success())
+        {
+            "wrangler"
+        } else {
+            "npx wrangler"
+        }
+    })
+}
+
 pub async fn create_resources(
     ui: &Ui,
     config: &LaunchpadConfig,
@@ -15,7 +34,7 @@ pub async fn create_resources(
             let pages_name = format!("{}-web", config.name);
             ui.run_command(
                 &format!("Created Pages project \"{}\"", pages_name),
-                &format!("wrangler pages project create {}", pages_name),
+                &format!("{} pages project create {} --production-branch main", wrangler_cmd(), pages_name),
                 root,
             )
             .await?;
@@ -32,7 +51,7 @@ pub async fn create_resources(
                 let output = ui
                     .run_command(
                         &format!("Created D1 database \"{}\"", name),
-                        &format!("wrangler d1 create {}", name),
+                        &format!("{} d1 create {}", wrangler_cmd(), name),
                         root,
                     )
                     .await?;
@@ -44,7 +63,7 @@ pub async fn create_resources(
                 let name = format!("{}-r2", config.name);
                 ui.run_command(
                     &format!("Created R2 bucket \"{}\"", name),
-                    &format!("wrangler r2 bucket create {}", name),
+                    &format!("{} r2 bucket create {}", wrangler_cmd(), name),
                     root,
                 )
                 .await?;
@@ -56,7 +75,7 @@ pub async fn create_resources(
                 let output = ui
                     .run_command(
                         &format!("Created KV namespace \"{}\"", name),
-                        &format!("wrangler kv namespace create {}", name),
+                        &format!("{} kv namespace create {}", wrangler_cmd(), name),
                         root,
                     )
                     .await?;
@@ -68,7 +87,7 @@ pub async fn create_resources(
                 let name = format!("{}-queue", config.name);
                 ui.run_command(
                     &format!("Created Queue \"{}\"", name),
-                    &format!("wrangler queues create {}", name),
+                    &format!("{} queues create {}", wrangler_cmd(), name),
                     root,
                 )
                 .await?;
@@ -84,13 +103,19 @@ pub async fn create_resources(
 
 fn parse_d1_id(output: &str) -> Option<String> {
     for line in output.lines() {
-        if let Some(id_part) = line.strip_prefix("database_id = ") {
-            return Some(id_part.trim().trim_matches('"').to_string());
-        }
-        if line.contains("database_id") && line.contains('|') {
-            let parts: Vec<&str> = line.split('|').collect();
-            if parts.len() >= 3 {
-                return Some(parts[2].trim().to_string());
+        let trimmed = line.trim();
+        // JSON format: "database_id": "uuid-here"
+        if trimmed.contains("database_id") && trimmed.contains(':') {
+            let id = trimmed
+                .split(':')
+                .nth(1)?
+                .trim()
+                .trim_matches('"')
+                .trim_matches(',')
+                .trim()
+                .to_string();
+            if !id.is_empty() {
+                return Some(id);
             }
         }
     }
@@ -124,7 +149,7 @@ pub async fn delete_resources(ui: &Ui, state: &LaunchpadState, root: &Path) -> R
                 let _ = ui
                     .run_command(
                         &format!("Deleted D1 database \"{}\"", resource.name),
-                        &format!("wrangler d1 delete {} --yes", resource.name),
+                        &format!("{} d1 delete {} -y", wrangler_cmd(), resource.name),
                         root,
                     )
                     .await;
@@ -133,7 +158,7 @@ pub async fn delete_resources(ui: &Ui, state: &LaunchpadState, root: &Path) -> R
                 let _ = ui
                     .run_command(
                         &format!("Deleted R2 bucket \"{}\"", resource.name),
-                        &format!("wrangler r2 bucket delete {}", resource.name),
+                        &format!("{} r2 bucket delete {}", wrangler_cmd(), resource.name),
                         root,
                     )
                     .await;
@@ -143,7 +168,7 @@ pub async fn delete_resources(ui: &Ui, state: &LaunchpadState, root: &Path) -> R
                     let _ = ui
                         .run_command(
                             &format!("Deleted KV namespace \"{}\"", resource.name),
-                            &format!("wrangler kv namespace delete --namespace-id {}", resource.id),
+                            &format!("{} kv namespace delete --namespace-id {}", wrangler_cmd(), resource.id),
                             root,
                         )
                         .await;
@@ -153,7 +178,7 @@ pub async fn delete_resources(ui: &Ui, state: &LaunchpadState, root: &Path) -> R
                 let _ = ui
                     .run_command(
                         &format!("Deleted Queue \"{}\"", resource.name),
-                        &format!("wrangler queues delete {}", resource.name),
+                        &format!("{} queues delete {}", wrangler_cmd(), resource.name),
                         root,
                     )
                     .await;
@@ -162,7 +187,7 @@ pub async fn delete_resources(ui: &Ui, state: &LaunchpadState, root: &Path) -> R
                 let _ = ui
                     .run_command(
                         &format!("Deleted Pages project \"{}\"", resource.name),
-                        &format!("wrangler pages project delete {} --yes", resource.name),
+                        &format!("{} pages project delete {} --yes", wrangler_cmd(), resource.name),
                         root,
                     )
                     .await;
