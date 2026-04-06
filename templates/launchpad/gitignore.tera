@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.dev.vars
+.env
+.wrangler/
+*.log
+.DS_Store
+.playwright-mcp/
+.launchpad-state.json

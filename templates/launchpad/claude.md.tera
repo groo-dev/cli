@@ -1,0 +1,57 @@
+# {{ name }}
+
+{{ description }}
+
+## Coding Practices
+
+### Error Handling
+- Never write code in huge try/catch blocks. Catch errors at the specific
+  operation that can fail. Each catch must log the error with full context.
+- Never suppress errors or build fallbacks that hide problems. Log everything,
+  let errors surface.
+- If the correct approach fails, throw an error. Don't patch around it with
+  fallback solutions — debug and fix the root cause.
+
+### Environment Variables & Configuration
+- Never use default values where a value is expected. If an env var, function
+  parameter, or API param is required and missing, throw an error immediately.
+- Never create types for env vars manually. Run `npm run cf-typegen` to generate
+  types from wrangler.jsonc. Add secrets to `.dev.vars`, then run cf-typegen.
+- Access all env vars through config.ts getters that validate and throw on missing.
+- Vars go in wrangler.jsonc. Secrets go in .dev.vars. Never set defaults in code.
+
+### Database Migrations
+- Never manually create or edit migration files in `migrations/` directories.
+- Generate migrations from Drizzle schema: `npm run db:generate`
+- Apply with wrangler: `npm run db:migrate:local` / `npm run db:migrate:remote`
+
+### UI Design
+- Always use the frontend-design skill to design user interfaces.
+
+### Planning
+- For complex or multi-step tasks, use the brainstorming skill first.
+{% if has_ios %}
+### SwiftUI
+- After writing SwiftUI code, use swiftui-pro skill to review before committing.
+  Show the review to the developer and let them choose what to fix.
+{% endif %}
+## Project Structure
+
+{% raw %}```{% endraw %}
+{% for project in projects %}{{ project.dir }}/  — {{ project.description }}
+{% endfor %}{% raw %}```{% endraw %}
+
+## Development
+
+{% raw %}```bash{% endraw %}
+groo dev
+{% raw %}```{% endraw %}
+
+## Deployment
+
+Auto-deploys on push to `main` via GitHub Actions.
+
+Manual deploy per project:
+{% raw %}```bash{% endraw %}
+cd <project> && VERSION=x.x.x npm run deploy
+{% raw %}```{% endraw %}

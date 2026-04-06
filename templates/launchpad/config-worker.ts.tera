@@ -1,0 +1,15 @@
+export function getConfig(env: CloudflareBindings) {
+  return {
+    get version(): string {
+      return env.VERSION || "dev";
+    },{% if auth == "clerk" %}
+    get clerkSecretKey(): string {
+      if (!env.CLERK_SECRET_KEY) throw new Error("CLERK_SECRET_KEY is not set in .dev.vars");
+      return env.CLERK_SECRET_KEY;
+    },{% endif %}{% if email == "resend" %}
+    get resendApiKey(): string {
+      if (!env.RESEND_API_KEY) throw new Error("RESEND_API_KEY is not set in .dev.vars");
+      return env.RESEND_API_KEY;
+    },{% endif %}
+  };
+}

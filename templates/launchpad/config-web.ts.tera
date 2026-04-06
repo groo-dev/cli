@@ -1,0 +1,10 @@
+export const config = {
+  get version(): string {
+    return import.meta.env.VITE_VERSION || "dev";
+  },{% if auth == "clerk" %}
+  get clerkPublishableKey(): string {
+    const val = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+    if (!val) throw new Error("VITE_CLERK_PUBLISHABLE_KEY is not set in .env");
+    return val;
+  },{% endif %}
+};

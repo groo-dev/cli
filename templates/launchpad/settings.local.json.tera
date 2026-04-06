@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "deny": [{% for project in d1_projects %}
+      "Edit({{ project.dir }}/migrations/**)",
+      "Write({{ project.dir }}/migrations/**)"{% if not loop.last %},{% endif %}{% endfor %}
+    ]
+  },
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  }
+}

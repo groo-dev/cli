@@ -1,0 +1,56 @@
+# {{ name }}
+
+{{ description }}
+
+## Project Structure
+
+{% for project in projects %}- **{{ project.dir }}/** — {{ project.description }}
+{% endfor %}
+## Prerequisites
+
+- Node.js (v24+)
+- [wrangler](https://developers.cloudflare.com/workers/wrangler/) (`npm install -g wrangler`)
+- [groo CLI](https://github.com/groo-dev/cli) (`brew install groo-dev/tap/groo`)
+
+## Setup
+
+{% raw %}```bash{% endraw %}
+git clone <repo-url>
+cd {{ name }}
+{% for project in projects %}
+# {{ project.dir }}
+cd {{ project.dir }} && npm install && cd ..{% endfor %}
+{% raw %}```{% endraw %}
+
+Copy environment files:
+{% for project in projects %}{% if project.env_example %}
+{% raw %}```bash{% endraw %}
+cp {{ project.dir }}/{{ project.env_file }} {{ project.dir }}/{{ project.env_target }}
+{% raw %}```{% endraw %}
+{% endif %}{% endfor %}
+## Run Locally
+
+{% raw %}```bash{% endraw %}
+groo dev
+{% raw %}```{% endraw %}
+
+## Deployment
+
+Auto-deploys on push to `main` via GitHub Actions.
+
+Required GitHub secrets:
+- `CLOUDFLARE_API_TOKEN` — Cloudflare API token
+- `CLOUDFLARE_ACCOUNT_ID` — Cloudflare account ID
+- `OPS_API_TOKEN` — Groo Ops Dashboard token
+
+Manual deploy:
+{% raw %}```bash{% endraw %}
+cd <project> && VERSION=x.x.x npm run deploy
+{% raw %}```{% endraw %}
+{% if has_env_vars %}
+## Environment Variables
+
+| Variable | Project | Where |
+|---|---|---|{% for env_var in env_vars %}
+| `{{ env_var.name }}` | {{ env_var.project }} | {{ env_var.location }} |{% endfor %}
+{% endif %}

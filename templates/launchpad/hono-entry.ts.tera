@@ -1,0 +1,9 @@
+import { Hono } from "hono";
+
+const app = new Hono<{ Bindings: CloudflareBindings }>().basePath("/v1");
+
+app.get("/health", (c) =>
+  c.json({ status: "ok", version: c.env.VERSION })
+);
+
+export default app;

@@ -1,0 +1,49 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "{{ prefix }}-{{ project_name }}",
+  "main": "src/index.ts",
+  "compatibility_date": "{{ today }}",
+  "observability": { "enabled": true },
+  "upload_source_maps": true,
+  "compatibility_flags": ["nodejs_compat"],
+  "dev": { "port": {{ port }} }{% if project_type == "api-worker" and domain %},
+  "routes": [
+    {
+      "pattern": "{{ domain }}/v1/*",
+      "zone_name": "{{ zone }}"
+    }
+  ]{% endif %}{% if has_d1 %},
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "{{ prefix }}-d1",
+      "database_id": "{{ d1_id | default(value='') }}"{% if remote %},
+      "remote": true{% endif %}
+    }
+  ]{% endif %}{% if has_r2 %},
+  "r2_buckets": [
+    {
+      "binding": "BUCKET",
+      "bucket_name": "{{ prefix }}-r2"{% if remote %},
+      "remote": true{% endif %}
+    }
+  ]{% endif %}{% if has_kv %},
+  "kv_namespaces": [
+    {
+      "binding": "KV",
+      "id": "{{ kv_id | default(value='') }}"{% if remote %},
+      "remote": true{% endif %}
+    }
+  ]{% endif %}{% if has_queues %},
+  "queues": {
+    "producers": [
+      {
+        "binding": "QUEUE",
+        "queue": "{{ prefix }}-queue"
+      }
+    ]
+  }{% endif %}{% if has_ai_gateway %},
+  "ai": {
+    "binding": "AI"
+  }{% endif %}
+}

@@ -1,0 +1,46 @@
+name: Deploy {{ project_name }}
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "{{ project_dir }}/**"
+      - ".github/workflows/deploy-{{ project_name }}.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Record Release
+        id: release
+        uses: groo-dev/record-release@v1
+        with:
+          token: {% raw %}${{ secrets.OPS_API_TOKEN }}{% endraw %}
+          environment: production
+          bump: patch
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: "{{ project_dir }}/package-lock.json"
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: "{{ project_dir }}"
+
+      - name: Deploy
+        run: npm run deploy
+        working-directory: "{{ project_dir }}"
+        env:
+          CLOUDFLARE_API_TOKEN: {% raw %}${{ secrets.CLOUDFLARE_API_TOKEN }}{% endraw %}
+          CLOUDFLARE_ACCOUNT_ID: {% raw %}${{ secrets.CLOUDFLARE_ACCOUNT_ID }}{% endraw %}
+          VERSION: {% raw %}${{ steps.release.outputs.version }}{% endraw %}

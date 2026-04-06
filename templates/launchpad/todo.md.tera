@@ -1,0 +1,46 @@
+# Setup TODO
+
+## Checklist
+
+- [ ] Create Cloudflare API token
+- [ ] Add GitHub secrets (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `OPS_API_TOKEN`){% if domain %}
+- [ ] Configure custom domain in Cloudflare{% endif %}
+- [ ] Add production environment variables
+
+---
+
+## Create Cloudflare API token
+
+1. Go to https://dash.cloudflare.com/profile/api-tokens
+2. Click "Create Token"
+3. Use the "Edit Cloudflare Workers" template
+4. Add `Cloudflare Pages: Edit` permission
+5. Set zone resources to your domain
+6. Create and copy the token
+
+## Add GitHub secrets
+
+Go to your GitHub repo > Settings > Secrets and variables > Actions > New repository secret.
+
+| Secret | Where to find it |
+|--------|-----------------|
+| `CLOUDFLARE_API_TOKEN` | The token you just created above |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare dashboard > any domain > Overview > right sidebar |
+| `OPS_API_TOKEN` | Groo Ops Dashboard > Project Settings > API Tokens |
+{% if domain %}
+## Configure custom domain
+
+1. Go to Cloudflare dashboard > your zone > DNS
+2. Add a CNAME record for `{{ domain }}` pointing to `{{ prefix }}-web.pages.dev` (proxied)
+3. Go to Pages > {{ prefix }}-web > Custom domains > Add `{{ domain }}`{% if has_api_worker %}
+4. The API route (`{{ domain }}/v1/*`) is configured in wrangler.jsonc and activates on first deploy{% endif %}
+{% endif %}
+## Add production environment variables
+
+For each worker, add secrets via wrangler CLI:
+
+{% raw %}```bash{% endraw %}
+{% for project in worker_projects %}wrangler secret put SECRET_NAME --name {{ prefix }}-{{ project.name }}
+{% endfor %}{% raw %}```{% endraw %}
+
+Or add them in Cloudflare dashboard > Workers & Pages > your worker > Settings > Variables.
