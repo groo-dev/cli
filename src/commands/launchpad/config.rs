@@ -1,7 +1,6 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[allow(dead_code)]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct LaunchpadConfig {
     pub name: String,
     pub root: String,
@@ -12,8 +11,7 @@ pub struct LaunchpadConfig {
     pub remote: bool,
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct ProjectConfig {
     pub name: String,
     #[serde(rename = "type")]
@@ -24,7 +22,7 @@ pub struct ProjectConfig {
     pub resources: Vec<Resource>,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Clone)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub enum ProjectType {
     Web,
@@ -34,7 +32,20 @@ pub enum ProjectType {
     Android,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Clone)]
+impl ProjectType {
+    #[allow(dead_code)]
+    pub fn label(&self) -> &str {
+        match self {
+            ProjectType::Web => "web app",
+            ProjectType::ApiWorker => "API worker",
+            ProjectType::LightweightWorker => "lightweight worker",
+            ProjectType::Ios => "iOS app",
+            ProjectType::Android => "Android app",
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, PartialEq, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub enum AuthProvider {
     Clerk,
@@ -42,13 +53,13 @@ pub enum AuthProvider {
     Simple,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Clone)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub enum EmailProvider {
     Resend,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Clone)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub enum Resource {
     D1,
@@ -56,4 +67,57 @@ pub enum Resource {
     Kv,
     Queues,
     AiGateway,
+}
+
+impl Resource {
+    #[allow(dead_code)]
+    pub fn label(&self) -> &str {
+        match self {
+            Resource::D1 => "D1",
+            Resource::R2 => "R2",
+            Resource::Kv => "KV",
+            Resource::Queues => "Queues",
+            Resource::AiGateway => "AI Gateway",
+        }
+    }
+}
+
+impl LaunchpadConfig {
+    /// Derive the zone (root domain) from the application domain.
+    /// e.g., "app.example.com" -> "example.com", "example.com" -> "example.com"
+    #[allow(dead_code)]
+    pub fn zone(&self) -> Option<String> {
+        self.domain.as_ref().map(|d| {
+            let parts: Vec<&str> = d.split('.').collect();
+            if parts.len() > 2 {
+                parts[parts.len() - 2..].join(".")
+            } else {
+                d.clone()
+            }
+        })
+    }
+
+    #[allow(dead_code)]
+    pub fn has_api_worker(&self) -> bool {
+        self.projects.iter().any(|p| p.project_type == ProjectType::ApiWorker)
+    }
+
+    #[allow(dead_code)]
+    pub fn api_worker_port(&self, ports: &[(String, u16)]) -> Option<u16> {
+        self.projects.iter()
+            .find(|p| p.project_type == ProjectType::ApiWorker)
+            .and_then(|p| ports.iter().find(|(name, _)| name == &p.name).map(|(_, port)| *port))
+    }
+}
+
+impl ProjectConfig {
+    #[allow(dead_code)]
+    pub fn has_resource(&self, resource: &Resource) -> bool {
+        self.resources.contains(resource)
+    }
+
+    #[allow(dead_code)]
+    pub fn is_worker(&self) -> bool {
+        matches!(self.project_type, ProjectType::ApiWorker | ProjectType::LightweightWorker)
+    }
 }
