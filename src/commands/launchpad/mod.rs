@@ -1,4 +1,5 @@
 mod config;
+mod scaffold;
 mod state;
 mod ui;
 mod validation;
