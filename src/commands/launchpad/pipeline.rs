@@ -1,4 +1,4 @@
-use super::config::{LaunchpadConfig, ProjectType, Resource};
+use super::config::{LaunchpadConfig, ProjectType};
 use super::deps;
 use super::ports;
 use super::resources;
@@ -205,13 +205,13 @@ fn step_write_config_files(
             .unwrap_or(8787);
 
         match project.project_type {
-            ProjectType::ApiWorker | ProjectType::LightweightWorker => {
+            ProjectType::Worker => {
                 let ctx = engine.wrangler_context(config, project, port);
                 let content = engine.render("wrangler.jsonc", &ctx)?;
                 templates::write_template(&content, &project_dir.join("wrangler.jsonc"))?;
                 ui.success(&format!("{}/wrangler.jsonc", project.name));
 
-                if config.has_resource(&Resource::D1) {
+                if project.has_feature_type("drizzle") {
                     let ctx = tera::Context::new();
                     let content = engine.render("drizzle.config.ts", &ctx)?;
                     templates::write_template(&content, &project_dir.join("drizzle.config.ts"))?;
@@ -219,8 +219,8 @@ fn step_write_config_files(
                 }
             }
             ProjectType::Web => {
-                let api_port = config.api_worker_port(port_map);
-                let ctx = engine.vite_context(port, api_port);
+                let api_port = config.hono_worker_port(port_map);
+                let ctx = engine.vite_context(project, port, api_port);
                 let content = engine.render("vite.config.ts", &ctx)?;
                 templates::write_template(&content, &project_dir.join("vite.config.ts"))?;
                 ui.success(&format!("{}/vite.config.ts", project.name));
@@ -269,7 +269,7 @@ fn step_write_package_scripts(
 
         if let Some(scripts) = pkg.get_mut("scripts").and_then(|s| s.as_object_mut()) {
             match project.project_type {
-                ProjectType::ApiWorker | ProjectType::LightweightWorker => {
+                ProjectType::Worker => {
                     scripts.insert(
                         "dev".to_string(),
                         serde_json::json!(format!("wrangler dev --port {}", port)),
@@ -283,7 +283,7 @@ fn step_write_package_scripts(
                         serde_json::json!("wrangler types"),
                     );
 
-                    if config.has_resource(&Resource::D1) {
+                    if project.has_feature_type("drizzle") {
                         scripts.insert(
                             "db:generate".to_string(),
                             serde_json::json!("drizzle-kit generate"),
@@ -348,14 +348,17 @@ fn step_write_boilerplate(
         let project_dir = root.join(&project.name);
 
         match project.project_type {
-            ProjectType::ApiWorker => {
-                // hono entry point
-                let ctx = tera::Context::new();
-                let content = engine.render("hono-entry.ts", &ctx)?;
+            ProjectType::Worker => {
                 let src_dir = project_dir.join("src");
                 std::fs::create_dir_all(&src_dir)?;
-                templates::write_template(&content, &src_dir.join("index.ts"))?;
-                ui.success(&format!("{}/src/index.ts (Hono entry)", project.name));
+
+                // Hono entry point (if hono feature)
+                if project.has_feature_type("hono") {
+                    let ctx = tera::Context::new();
+                    let content = engine.render("hono-entry.ts", &ctx)?;
+                    templates::write_template(&content, &src_dir.join("index.ts"))?;
+                    ui.success(&format!("{}/src/index.ts (Hono entry)", project.name));
+                }
 
                 // config.ts
                 let ctx = engine.worker_config_context(project);
@@ -363,8 +366,8 @@ fn step_write_boilerplate(
                 templates::write_template(&content, &src_dir.join("config.ts"))?;
                 ui.success(&format!("{}/src/config.ts", project.name));
 
-                // schema.ts for D1
-                if config.has_resource(&Resource::D1) {
+                // schema.ts (if drizzle feature)
+                if project.has_feature_type("drizzle") {
                     let ctx = tera::Context::new();
                     let content = engine.render("schema.ts", &ctx)?;
                     let db_dir = src_dir.join("db");
@@ -373,28 +376,22 @@ fn step_write_boilerplate(
                     ui.success(&format!("{}/src/db/schema.ts", project.name));
                 }
             }
-            ProjectType::LightweightWorker => {
-                // config.ts
-                let ctx = engine.worker_config_context(project);
-                let content = engine.render("config-worker.ts", &ctx)?;
-                let src_dir = project_dir.join("src");
-                std::fs::create_dir_all(&src_dir)?;
-                templates::write_template(&content, &src_dir.join("config.ts"))?;
-                ui.success(&format!("{}/src/config.ts", project.name));
-            }
             ProjectType::Web => {
-                // axios client
-                let ctx = tera::Context::new();
-                let content = engine.render("axios-client.ts", &ctx)?;
-                let lib_dir = project_dir.join("src").join("lib");
-                std::fs::create_dir_all(&lib_dir)?;
-                templates::write_template(&content, &lib_dir.join("api.ts"))?;
-                ui.success(&format!("{}/src/lib/api.ts (Axios client)", project.name));
+                let src_dir = project_dir.join("src");
+
+                // axios client (if axios feature)
+                if project.has_feature_type("axios") {
+                    let ctx = tera::Context::new();
+                    let content = engine.render("axios-client.ts", &ctx)?;
+                    let lib_dir = src_dir.join("lib");
+                    std::fs::create_dir_all(&lib_dir)?;
+                    templates::write_template(&content, &lib_dir.join("api.ts"))?;
+                    ui.success(&format!("{}/src/lib/api.ts (Axios client)", project.name));
+                }
 
                 // config.ts
                 let ctx = engine.web_config_context(project);
                 let content = engine.render("config-web.ts", &ctx)?;
-                let src_dir = project_dir.join("src");
                 templates::write_template(&content, &src_dir.join("config.ts"))?;
                 ui.success(&format!("{}/src/config.ts", project.name));
             }
@@ -433,7 +430,7 @@ fn step_write_env_examples(
                 templates::write_template(&content, &project_dir.join(".env.example"))?;
                 ui.success(&format!("{}/.env.example", project.name));
             }
-            ProjectType::ApiWorker | ProjectType::LightweightWorker => {
+            ProjectType::Worker => {
                 let ctx = engine.env_example_context(project);
                 let content = engine.render("dev.vars.example", &ctx)?;
                 templates::write_template(&content, &project_dir.join(".dev.vars.example"))?;
@@ -593,20 +590,14 @@ async fn step_db_migrations(
         return Ok(());
     }
 
-    if !config.has_resource(&Resource::D1) {
-        state.mark_complete(step, None);
-        state.save()?;
-        return Ok(());
-    }
-
-    // Run migrations for API workers (they have drizzle schema)
-    let api_workers: Vec<_> = config
+    // Run migrations for workers with drizzle feature
+    let drizzle_workers: Vec<_> = config
         .projects
         .iter()
-        .filter(|p| p.project_type == ProjectType::ApiWorker)
+        .filter(|p| p.has_feature_type("drizzle"))
         .collect();
 
-    if api_workers.is_empty() {
+    if drizzle_workers.is_empty() {
         state.mark_complete(step, None);
         state.save()?;
         return Ok(());
@@ -615,7 +606,7 @@ async fn step_db_migrations(
     ui.newline();
     ui.section("Database setup:");
 
-    for project in api_workers {
+    for project in drizzle_workers {
         let project_dir = root.join(&project.name);
 
         ui.run_command(
@@ -680,7 +671,7 @@ fn step_write_project_files(
     // GitHub Actions workflows
     for project in &config.projects {
         match project.project_type {
-            ProjectType::ApiWorker | ProjectType::LightweightWorker => {
+            ProjectType::Worker => {
                 let deploy_ctx = engine.deploy_context(&project.name, &project.name);
                 let content = engine.render("deploy-worker.yml", &deploy_ctx)?;
                 let workflow_path = root

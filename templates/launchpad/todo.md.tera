@@ -32,7 +32,7 @@ Go to your GitHub repo > Settings > Secrets and variables > Actions > New reposi
 
 1. Go to Cloudflare dashboard > your zone > DNS
 2. Add a CNAME record for `{{ domain }}` pointing to `{{ prefix }}-web.pages.dev` (proxied)
-3. Go to Pages > {{ prefix }}-web > Custom domains > Add `{{ domain }}`{% if has_api_worker %}
+3. Go to Pages > {{ prefix }}-web > Custom domains > Add `{{ domain }}`{% if has_hono_worker %}
 4. The API route (`{{ domain }}/v1/*`) is configured in wrangler.jsonc and activates on first deploy{% endif %}
 {% endif %}
 ## Add production environment variables

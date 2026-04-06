@@ -6,7 +6,7 @@
   "observability": { "enabled": true },
   "upload_source_maps": true,
   "compatibility_flags": ["nodejs_compat"],
-  "dev": { "port": {{ port }} }{% if project_type == "api-worker" and domain %},
+  "dev": { "port": {{ port }} }{% if has_hono and domain %},
   "routes": [
     {
       "pattern": "{{ domain }}/v1/*",

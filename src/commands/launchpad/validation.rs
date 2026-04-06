@@ -1,4 +1,4 @@
-use super::config::{LaunchpadConfig, ProjectType};
+use super::config::{Feature, LaunchpadConfig, ProjectType};
 use std::collections::HashSet;
 use std::path::Path;
 
@@ -31,7 +31,12 @@ fn validate_name(name: &str, errors: &mut Vec<String>) {
     }
 }
 
-fn validate_root(root_value: &str, root_path: &Path, config: &LaunchpadConfig, errors: &mut Vec<String>) {
+fn validate_root(
+    root_value: &str,
+    root_path: &Path,
+    config: &LaunchpadConfig,
+    errors: &mut Vec<String>,
+) {
     if root_value == "." {
         for project in &config.projects {
             let project_dir = root_path.join(&project.name);
@@ -78,9 +83,9 @@ fn validate_projects(projects: &[super::config::ProjectConfig], errors: &mut Vec
 }
 
 fn validate_domain(config: &LaunchpadConfig, errors: &mut Vec<String>) {
-    if config.has_api_worker() && config.domain.is_none() {
+    if config.has_hono_worker() && config.domain.is_none() {
         errors.push(
-            "Missing 'domain': required when any project is an API worker. \
+            "Missing 'domain': required when any worker has the 'hono' feature. \
              Add a domain like \"myapp.groo.bot\"."
                 .to_string(),
         );
@@ -100,35 +105,59 @@ fn validate_project(project: &super::config::ProjectConfig, errors: &mut Vec<Str
         ));
     }
 
-    match project.project_type {
-        ProjectType::Web => {
-            if project.email.is_some() {
-                errors.push(format!(
-                    "Project '{}': web projects don't have email integration. \
-                     Remove 'email' or move it to a worker.",
-                    project.name
-                ));
+    // ios/android must not have features
+    if matches!(project.project_type, ProjectType::Ios | ProjectType::Android)
+        && !project.features.is_empty()
+    {
+        errors.push(format!(
+            "Project '{}': {} projects must not have features.",
+            project.name,
+            project.project_type.label()
+        ));
+        return;
+    }
+
+    // Validate each feature is valid for the project type
+    let web_features = ["tailwind", "shadcn", "tanstack-router", "tanstack-query", "axios"];
+    let worker_features = ["hono", "drizzle", "email"];
+
+    for feature in &project.features {
+        let feature_name = feature_type_name(feature);
+        match project.project_type {
+            ProjectType::Web => {
+                if worker_features.contains(&feature_name) {
+                    errors.push(format!(
+                        "Project '{}': feature '{}' is not available on web projects. \
+                         Move it to a worker project.",
+                        project.name, feature_name
+                    ));
+                }
             }
+            ProjectType::Worker => {
+                if web_features.contains(&feature_name) {
+                    errors.push(format!(
+                        "Project '{}': feature '{}' is not available on worker projects. \
+                         Move it to a web project.",
+                        project.name, feature_name
+                    ));
+                }
+            }
+            _ => {}
         }
-        ProjectType::Ios | ProjectType::Android => {
-            if project.auth.is_some() {
-                errors.push(format!(
-                    "Project '{}': {} projects don't have auth configured via launchpad. \
-                     Remove 'auth'.",
-                    project.name,
-                    project.project_type.label()
-                ));
-            }
-            if project.email.is_some() {
-                errors.push(format!(
-                    "Project '{}': {} projects don't have email integration. \
-                     Remove 'email'.",
-                    project.name,
-                    project.project_type.label()
-                ));
-            }
-        }
-        ProjectType::ApiWorker | ProjectType::LightweightWorker => {}
+    }
+}
+
+fn feature_type_name(feature: &Feature) -> &str {
+    match feature {
+        Feature::Tailwind => "tailwind",
+        Feature::Shadcn => "shadcn",
+        Feature::TanstackRouter => "tanstack-router",
+        Feature::TanstackQuery => "tanstack-query",
+        Feature::Axios => "axios",
+        Feature::Hono => "hono",
+        Feature::Drizzle => "drizzle",
+        Feature::Auth { .. } => "auth",
+        Feature::Email { .. } => "email",
     }
 }
 

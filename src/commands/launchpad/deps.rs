@@ -1,4 +1,4 @@
-use super::config::{AuthProvider, EmailProvider, ProjectConfig, ProjectType};
+use super::config::{AuthProvider, EmailProvider, Feature, ProjectConfig, ProjectType};
 use super::ui::Ui;
 use anyhow::Result;
 use std::path::Path;
@@ -6,51 +6,62 @@ use std::path::Path;
 pub async fn install_deps(ui: &Ui, project: &ProjectConfig, project_dir: &Path) -> Result<()> {
     match project.project_type {
         ProjectType::Web => install_web_deps(ui, project, project_dir).await,
-        ProjectType::ApiWorker => install_api_worker_deps(ui, project, project_dir).await,
-        ProjectType::LightweightWorker => install_lightweight_worker_deps(ui, project_dir).await,
+        ProjectType::Worker => install_worker_deps(ui, project, project_dir).await,
         ProjectType::Ios | ProjectType::Android => Ok(()),
     }
 }
 
 async fn install_web_deps(ui: &Ui, project: &ProjectConfig, dir: &Path) -> Result<()> {
-    let mut deps = vec![
-        "@tanstack/react-router",
-        "@tanstack/react-query",
-        "axios",
-        "date-fns",
-        "clsx",
-        "tailwind-merge",
-        "class-variance-authority",
-        "lucide-react",
-    ];
+    let mut deps: Vec<&str> = Vec::new();
+    let mut dev_deps: Vec<&str> = vec!["typescript", "@vitejs/plugin-react", "eslint", "wrangler"];
 
-    match &project.auth {
-        Some(AuthProvider::Clerk) => {
-            deps.push("@clerk/clerk-react");
-            deps.push("@clerk/themes");
+    for feature in &project.features {
+        match feature {
+            Feature::Tailwind => {
+                dev_deps.push("tailwindcss");
+                dev_deps.push("@tailwindcss/vite");
+            }
+            Feature::Shadcn => {
+                // shadcn init is handled separately in the pipeline
+                deps.push("clsx");
+                deps.push("tailwind-merge");
+                deps.push("class-variance-authority");
+                deps.push("lucide-react");
+            }
+            Feature::TanstackRouter => {
+                deps.push("@tanstack/react-router");
+            }
+            Feature::TanstackQuery => {
+                deps.push("@tanstack/react-query");
+            }
+            Feature::Axios => {
+                deps.push("axios");
+            }
+            Feature::Auth {
+                provider: AuthProvider::Clerk,
+            } => {
+                deps.push("@clerk/clerk-react");
+                deps.push("@clerk/themes");
+            }
+            Feature::Auth {
+                provider: AuthProvider::BetterAuth,
+            } => {
+                deps.push("better-auth");
+            }
+            Feature::Auth { .. } => {}
+            _ => {}
         }
-        Some(AuthProvider::BetterAuth) => {
-            deps.push("better-auth");
-        }
-        _ => {}
     }
 
-    let dep_count = deps.len();
-    ui.run_command(
-        &format!("Installed {} packages", dep_count),
-        &format!("npm install {}", deps.join(" ")),
-        dir,
-    )
-    .await?;
-
-    let dev_deps = [
-        "tailwindcss",
-        "@tailwindcss/vite",
-        "typescript",
-        "@vitejs/plugin-react",
-        "eslint",
-        "wrangler",
-    ];
+    if !deps.is_empty() {
+        let count = deps.len();
+        ui.run_command(
+            &format!("Installed {} packages", count),
+            &format!("npm install {}", deps.join(" ")),
+            dir,
+        )
+        .await?;
+    }
 
     ui.run_command(
         &format!("Installed {} dev packages", dev_deps.len()),
@@ -62,41 +73,46 @@ async fn install_web_deps(ui: &Ui, project: &ProjectConfig, dir: &Path) -> Resul
     Ok(())
 }
 
-async fn install_api_worker_deps(ui: &Ui, project: &ProjectConfig, dir: &Path) -> Result<()> {
-    let mut deps = vec!["hono", "drizzle-orm"];
+async fn install_worker_deps(ui: &Ui, project: &ProjectConfig, dir: &Path) -> Result<()> {
+    let mut deps: Vec<&str> = Vec::new();
+    let mut dev_deps: Vec<&str> = vec!["wrangler", "@types/node"];
 
-    if let Some(AuthProvider::Clerk) = &project.auth {
-        deps.push("@clerk/backend")
+    for feature in &project.features {
+        match feature {
+            Feature::Hono => {
+                deps.push("hono");
+            }
+            Feature::Drizzle => {
+                deps.push("drizzle-orm");
+                dev_deps.push("drizzle-kit");
+            }
+            Feature::Auth {
+                provider: AuthProvider::Clerk,
+            } => {
+                deps.push("@clerk/backend");
+            }
+            Feature::Email {
+                provider: EmailProvider::Resend,
+            } => {
+                deps.push("resend");
+            }
+            _ => {}
+        }
     }
 
-    if let Some(EmailProvider::Resend) = &project.email {
-        deps.push("resend")
+    if !deps.is_empty() {
+        let count = deps.len();
+        ui.run_command(
+            &format!("Installed {} packages", count),
+            &format!("npm install {}", deps.join(" ")),
+            dir,
+        )
+        .await?;
     }
-
-    let dep_count = deps.len();
-    ui.run_command(
-        &format!("Installed {} packages", dep_count),
-        &format!("npm install {}", deps.join(" ")),
-        dir,
-    )
-    .await?;
-
-    let dev_deps = ["drizzle-kit", "wrangler", "@types/node"];
 
     ui.run_command(
         &format!("Installed {} dev packages", dev_deps.len()),
         &format!("npm install -D {}", dev_deps.join(" ")),
-        dir,
-    )
-    .await?;
-
-    Ok(())
-}
-
-async fn install_lightweight_worker_deps(ui: &Ui, dir: &Path) -> Result<()> {
-    ui.run_command(
-        "Installed dev packages",
-        "npm install -D wrangler @types/node",
         dir,
     )
     .await?;

@@ -1,6 +1,4 @@
-use super::config::{
-    AuthProvider, EmailProvider, LaunchpadConfig, ProjectConfig, ProjectType, Resource,
-};
+use super::config::{AuthProvider, EmailProvider, LaunchpadConfig, ProjectConfig, ProjectType, Resource};
 use anyhow::Result;
 use std::path::Path;
 use tera::{Context, Tera};
@@ -65,6 +63,7 @@ impl TemplateEngine {
             .map_err(|e| anyhow::anyhow!("Template rendering failed for '{}': {}", template_name, e))
     }
 
+    /// Build context for a worker's wrangler.jsonc
     pub fn wrangler_context(
         &self,
         config: &LaunchpadConfig,
@@ -74,7 +73,7 @@ impl TemplateEngine {
         let mut ctx = Context::new();
         ctx.insert("prefix", &config.name);
         ctx.insert("project_name", &project.name);
-        ctx.insert("project_type", &serde_json::to_value(&project.project_type).unwrap());
+        ctx.insert("has_hono", &project.has_feature_type("hono"));
         ctx.insert("today", &chrono::Local::now().format("%Y-%m-%d").to_string());
         ctx.insert("port", &port);
         ctx.insert("domain", &config.domain);
@@ -90,48 +89,70 @@ impl TemplateEngine {
         ctx
     }
 
-    pub fn vite_context(&self, port: u16, api_port: Option<u16>) -> Context {
+    /// Build context for a web project's vite.config.ts
+    pub fn vite_context(
+        &self,
+        project: &ProjectConfig,
+        port: u16,
+        api_port: Option<u16>,
+    ) -> Context {
         let mut ctx = Context::new();
         ctx.insert("port", &port);
+        ctx.insert("has_tailwind", &project.has_feature_type("tailwind"));
+        ctx.insert("has_axios", &project.has_feature_type("axios"));
         ctx.insert("api_port", &api_port);
         ctx
     }
 
+    /// Build context for a worker's config.ts
     pub fn worker_config_context(&self, project: &ProjectConfig) -> Context {
         let mut ctx = Context::new();
         ctx.insert(
             "auth",
-            &project.auth.as_ref().map(|a| serde_json::to_value(a).unwrap()),
+            &project
+                .auth_provider()
+                .map(|a| serde_json::to_value(a).unwrap()),
         );
         ctx.insert(
             "email",
-            &project.email.as_ref().map(|e| serde_json::to_value(e).unwrap()),
+            &project
+                .email_provider()
+                .map(|e| serde_json::to_value(e).unwrap()),
         );
         ctx
     }
 
+    /// Build context for a web project's config.ts
     pub fn web_config_context(&self, project: &ProjectConfig) -> Context {
         let mut ctx = Context::new();
         ctx.insert(
             "auth",
-            &project.auth.as_ref().map(|a| serde_json::to_value(a).unwrap()),
+            &project
+                .auth_provider()
+                .map(|a| serde_json::to_value(a).unwrap()),
         );
         ctx
     }
 
+    /// Build context for env example files
     pub fn env_example_context(&self, project: &ProjectConfig) -> Context {
         let mut ctx = Context::new();
         ctx.insert(
             "auth",
-            &project.auth.as_ref().map(|a| serde_json::to_value(a).unwrap()),
+            &project
+                .auth_provider()
+                .map(|a| serde_json::to_value(a).unwrap()),
         );
         ctx.insert(
             "email",
-            &project.email.as_ref().map(|e| serde_json::to_value(e).unwrap()),
+            &project
+                .email_provider()
+                .map(|e| serde_json::to_value(e).unwrap()),
         );
         ctx
     }
 
+    /// Build context for deploy workflow
     pub fn deploy_context(&self, project_name: &str, project_dir: &str) -> Context {
         let mut ctx = Context::new();
         ctx.insert("project_name", project_name);
@@ -139,6 +160,7 @@ impl TemplateEngine {
         ctx
     }
 
+    /// Build context for project-level files (CLAUDE.md, README, TODO)
     pub fn project_files_context(
         &self,
         config: &LaunchpadConfig,
@@ -149,10 +171,13 @@ impl TemplateEngine {
         ctx.insert("prefix", &config.name);
         ctx.insert("description", &config.description);
         ctx.insert("domain", &config.domain);
-        ctx.insert("has_api_worker", &config.has_api_worker());
+        ctx.insert("has_hono_worker", &config.has_hono_worker());
         ctx.insert(
             "has_ios",
-            &config.projects.iter().any(|p| p.project_type == ProjectType::Ios),
+            &config
+                .projects
+                .iter()
+                .any(|p| p.project_type == ProjectType::Ios),
         );
 
         let projects: Vec<serde_json::Value> = config
@@ -201,15 +226,15 @@ impl TemplateEngine {
             match p.project_type {
                 ProjectType::Web => {
                     env_vars.push(serde_json::json!({ "name": "VITE_VERSION", "project": p.name, "location": ".env" }));
-                    if matches!(p.auth, Some(AuthProvider::Clerk)) {
+                    if matches!(p.auth_provider(), Some(AuthProvider::Clerk)) {
                         env_vars.push(serde_json::json!({ "name": "VITE_CLERK_PUBLISHABLE_KEY", "project": p.name, "location": ".env" }));
                     }
                 }
-                ProjectType::ApiWorker | ProjectType::LightweightWorker => {
-                    if matches!(p.auth, Some(AuthProvider::Clerk)) {
+                ProjectType::Worker => {
+                    if matches!(p.auth_provider(), Some(AuthProvider::Clerk)) {
                         env_vars.push(serde_json::json!({ "name": "CLERK_SECRET_KEY", "project": p.name, "location": ".dev.vars" }));
                     }
-                    if matches!(p.email, Some(EmailProvider::Resend)) {
+                    if matches!(p.email_provider(), Some(EmailProvider::Resend)) {
                         env_vars.push(serde_json::json!({ "name": "RESEND_API_KEY", "project": p.name, "location": ".dev.vars" }));
                     }
                 }

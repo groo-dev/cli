@@ -18,7 +18,7 @@ pub async fn scaffold_project(
             )
             .await?;
         }
-        ProjectType::ApiWorker | ProjectType::LightweightWorker => {
+        ProjectType::Worker => {
             ui.run_command(
                 "Scaffolded with Cloudflare Worker",
                 &format!(

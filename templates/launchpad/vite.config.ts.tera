@@ -1,11 +1,11 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import tailwindcss from "@tailwindcss/vite";
-
+{% if has_tailwind %}import tailwindcss from "@tailwindcss/vite";
+{% endif %}
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(){% if has_tailwind %}, tailwindcss(){% endif %}],
   server: {
-    port: {{ port }},{% if api_port %}
+    port: {{ port }},{% if has_axios and api_port %}
     proxy: {
       "/v1": {
         target: "http://localhost:{{ api_port }}",
