@@ -290,11 +290,17 @@ fn step_write_package_scripts(
                         );
                         scripts.insert(
                             "db:migrate:local".to_string(),
-                            serde_json::json!("wrangler d1 migrations apply --local"),
+                            serde_json::json!(format!(
+                                "wrangler d1 migrations apply {}-d1 --local",
+                                config.name
+                            )),
                         );
                         scripts.insert(
-                            "db:migrate:prod".to_string(),
-                            serde_json::json!("wrangler d1 migrations apply --remote"),
+                            "db:migrate:remote".to_string(),
+                            serde_json::json!(format!(
+                                "wrangler d1 migrations apply {}-d1 --remote",
+                                config.name
+                            )),
                         );
                     }
                 }
