@@ -102,8 +102,8 @@ impl TemplateEngine {
         ctx.insert("has_kv", &config.has_resource(&Resource::Kv));
         ctx.insert("has_queues", &config.has_resource(&Resource::Queues));
         ctx.insert("has_ai_gateway", &config.has_resource(&Resource::AiGateway));
-        ctx.insert("d1_id", &"");
-        ctx.insert("kv_id", &"");
+        ctx.insert("d1_id", "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
+        ctx.insert("kv_id", "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
         ctx
     }
 

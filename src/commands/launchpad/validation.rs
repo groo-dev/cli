@@ -76,7 +76,8 @@ fn validate_root(
                 root_value
             ));
         }
-        if root_path.exists() {
+        // Only error if the directory exists AND it's not from a previous launchpad run
+        if root_path.exists() && !root_path.join(".launchpad-state.json").exists() {
             errors.push(format!(
                 "Directory '{}' already exists. Remove it or choose a different name.",
                 root_value

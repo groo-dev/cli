@@ -17,7 +17,7 @@
     {
       "binding": "DB",
       "database_name": "{{ prefix }}-d1",
-      "database_id": "{{ d1_id | default(value='') }}"{% if remote %},
+      "database_id": "{{ d1_id }}"{% if remote %},
       "remote": true{% endif %}
     }
   ]{% endif %}{% if has_r2 %},
@@ -31,7 +31,7 @@
   "kv_namespaces": [
     {
       "binding": "KV",
-      "id": "{{ kv_id | default(value='') }}"{% if remote %},
+      "id": "{{ kv_id }}"{% if remote %},
       "remote": true{% endif %}
     }
   ]{% endif %}{% if has_queues %},

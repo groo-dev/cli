@@ -155,12 +155,45 @@ async fn step_shadcn_init(
     }
 
     let project_dir = root.join(&project.name);
+
+    // shadcn init requires tailwind CSS import and path aliases set up first
+    // 1. Add tailwind import to index.css
+    let css_path = project_dir.join("src/index.css");
+    std::fs::write(&css_path, "@import \"tailwindcss\";\n")?;
+
+    // 2. Add path alias to tsconfig.json and tsconfig.app.json
+    for tsconfig_name in ["tsconfig.json", "tsconfig.app.json"] {
+        let tsconfig_path = project_dir.join(tsconfig_name);
+        if tsconfig_path.exists() {
+            let content = std::fs::read_to_string(&tsconfig_path)?;
+            if let Ok(mut tsconfig) = serde_json::from_str::<serde_json::Value>(&content) {
+                // Ensure compilerOptions exists (tsconfig.json may be references-only)
+                if tsconfig.get("compilerOptions").is_none() {
+                    tsconfig
+                        .as_object_mut()
+                        .unwrap()
+                        .insert("compilerOptions".to_string(), serde_json::json!({}));
+                }
+                if let Some(compiler_options) = tsconfig
+                    .get_mut("compilerOptions")
+                    .and_then(|c| c.as_object_mut())
+                {
+                    compiler_options
+                        .insert("baseUrl".to_string(), serde_json::json!("."));
+                    compiler_options.insert(
+                        "paths".to_string(),
+                        serde_json::json!({ "@/*": ["./src/*"] }),
+                    );
+                }
+                let updated = serde_json::to_string_pretty(&tsconfig)?;
+                std::fs::write(&tsconfig_path, format!("{}\n", updated))?;
+            }
+        }
+    }
+
     ui.run_command(
         &format!("Initialized shadcn for {}", project.name),
-        &format!(
-            "npx shadcn@latest init -d -y -c {}",
-            project_dir.display()
-        ),
+        "npx shadcn@latest init -d -y",
         &project_dir,
     )
     .await?;
