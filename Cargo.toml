@@ -54,3 +54,6 @@ arboard = "3.6"
 
 # Ops encryption (RSA-OAEP + AES-GCM hybrid)
 rsa = { version = "0.9", features = ["sha2"] }
+
+# Launchpad template engine
+tera = "1.20"

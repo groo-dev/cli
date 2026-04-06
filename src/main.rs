@@ -71,6 +71,15 @@ enum Commands {
     },
     /// Check project configuration for issues
     Doctor,
+    /// Scaffold a new project from config
+    Launchpad {
+        /// Path to the launchpad config JSON file
+        #[arg(short, long)]
+        config: PathBuf,
+        /// Clean previous failed run before starting fresh
+        #[arg(long)]
+        clean: bool,
+    },
     /// Authenticate with Groo accounts
     Auth {
         #[command(subcommand)]
@@ -324,6 +333,9 @@ async fn main() -> Result<()> {
         Commands::Open { service } => commands::open::run(&service),
         Commands::Stop { project } => commands::stop::run(project),
         Commands::Doctor => commands::doctor::run().await,
+        Commands::Launchpad { config, clean } => {
+            commands::launchpad::run(config, clean).await
+        }
         Commands::Auth { command } => match command {
             AuthCommands::Login { pat } => commands::auth::login::run(pat).await,
             AuthCommands::Status => commands::auth::status::run(),
