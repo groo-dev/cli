@@ -1,7 +1,17 @@
 import { Hono } from "hono";
-
+{% if has_auth_clerk %}import { authMiddleware, requireAuth } from "./middleware/auth";
+{% endif %}{% if has_auth_better_auth %}import { requireAuth } from "./middleware/auth";
+{% endif %}
 const app = new Hono<{ Bindings: CloudflareBindings }>().basePath("/v1");
-
+{% if has_auth_clerk %}
+app.use("*", authMiddleware());
+{% endif %}{% if has_auth_better_auth %}
+app.on(["POST", "GET"], "/auth/*", (c) => {
+  const { createAuth } = require("./middleware/auth");
+  const auth = createAuth(c.env.DB);
+  return auth.handler(c.req.raw);
+});
+{% endif %}
 app.get("/health", (c) =>
   c.json({ status: "ok", version: c.env.VERSION })
 );

@@ -1,9 +1,16 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 {% if has_tailwind %}import tailwindcss from "@tailwindcss/vite";
+{% endif %}{% if has_tanstack_router %}import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
+{% endif %}{% if has_shadcn %}import path from "path";
 {% endif %}
 export default defineConfig({
-  plugins: [react(){% if has_tailwind %}, tailwindcss(){% endif %}],
+  plugins: [{% if has_tanstack_router %}TanStackRouterVite({ target: "react", autoCodeSplitting: true }), {% endif %}react(){% if has_tailwind %}, tailwindcss(){% endif %}],
+{% if has_shadcn %}  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+    },
+  },{% endif %}
   server: {
     port: {{ port }},{% if has_axios and api_port %}
     proxy: {

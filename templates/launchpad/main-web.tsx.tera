@@ -1,0 +1,25 @@
+import { StrictMode } from "react";
+import ReactDOM from "react-dom/client";
+{% if has_tanstack_query %}import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+{% endif %}{% if has_tanstack_router %}import { RouterProvider, createRouter } from "@tanstack/react-router";
+import { routeTree } from "./routeTree.gen";
+
+const router = createRouter({ routeTree });
+
+declare module "@tanstack/react-router" {
+  interface Register {
+    router: typeof router;
+  }
+}
+{% endif %}{% if has_tanstack_query %}
+const queryClient = new QueryClient();
+{% endif %}
+const rootElement = document.getElementById("root")!;
+ReactDOM.createRoot(rootElement).render(
+  <StrictMode>
+{% if has_tanstack_query %}    <QueryClientProvider client={queryClient}>
+{% endif %}{% if has_tanstack_router %}      <RouterProvider router={router} />
+{% else %}      <div>Hello World</div>
+{% endif %}{% if has_tanstack_query %}    </QueryClientProvider>
+{% endif %}  </StrictMode>,
+);
