@@ -6,6 +6,8 @@ pub struct LaunchpadConfig {
     pub root: String,
     pub description: String,
     pub domain: Option<String>,
+    #[serde(default)]
+    pub resources: Vec<Resource>,
     pub projects: Vec<ProjectConfig>,
     pub create_resources: bool,
     pub remote: bool,
@@ -18,8 +20,6 @@ pub struct ProjectConfig {
     pub project_type: ProjectType,
     pub auth: Option<AuthProvider>,
     pub email: Option<EmailProvider>,
-    #[serde(default)]
-    pub resources: Vec<Resource>,
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Clone)]
@@ -104,13 +104,13 @@ impl LaunchpadConfig {
             .find(|p| p.project_type == ProjectType::ApiWorker)
             .and_then(|p| ports.iter().find(|(name, _)| name == &p.name).map(|(_, port)| *port))
     }
-}
 
-impl ProjectConfig {
     pub fn has_resource(&self, resource: &Resource) -> bool {
         self.resources.contains(resource)
     }
+}
 
+impl ProjectConfig {
     pub fn is_worker(&self) -> bool {
         matches!(self.project_type, ProjectType::ApiWorker | ProjectType::LightweightWorker)
     }

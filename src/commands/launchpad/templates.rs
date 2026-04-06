@@ -80,11 +80,11 @@ impl TemplateEngine {
         ctx.insert("domain", &config.domain);
         ctx.insert("zone", &config.zone());
         ctx.insert("remote", &config.remote);
-        ctx.insert("has_d1", &project.has_resource(&Resource::D1));
-        ctx.insert("has_r2", &project.has_resource(&Resource::R2));
-        ctx.insert("has_kv", &project.has_resource(&Resource::Kv));
-        ctx.insert("has_queues", &project.has_resource(&Resource::Queues));
-        ctx.insert("has_ai_gateway", &project.has_resource(&Resource::AiGateway));
+        ctx.insert("has_d1", &config.has_resource(&Resource::D1));
+        ctx.insert("has_r2", &config.has_resource(&Resource::R2));
+        ctx.insert("has_kv", &config.has_resource(&Resource::Kv));
+        ctx.insert("has_queues", &config.has_resource(&Resource::Queues));
+        ctx.insert("has_ai_gateway", &config.has_resource(&Resource::AiGateway));
         ctx.insert("d1_id", &"");
         ctx.insert("kv_id", &"");
         ctx
@@ -183,12 +183,17 @@ impl TemplateEngine {
             .collect();
         ctx.insert("worker_projects", &worker_projects);
 
-        let d1_projects: Vec<serde_json::Value> = config
-            .projects
-            .iter()
-            .filter(|p| p.has_resource(&Resource::D1))
-            .map(|p| serde_json::json!({ "dir": p.name }))
-            .collect();
+        // D1 projects = all workers if top-level resources include D1
+        let d1_projects: Vec<serde_json::Value> = if config.has_resource(&Resource::D1) {
+            config
+                .projects
+                .iter()
+                .filter(|p| p.is_worker())
+                .map(|p| serde_json::json!({ "dir": p.name }))
+                .collect()
+        } else {
+            Vec::new()
+        };
         ctx.insert("d1_projects", &d1_projects);
 
         let mut env_vars: Vec<serde_json::Value> = Vec::new();

@@ -211,7 +211,7 @@ fn step_write_config_files(
                 templates::write_template(&content, &project_dir.join("wrangler.jsonc"))?;
                 ui.success(&format!("{}/wrangler.jsonc", project.name));
 
-                if project.has_resource(&Resource::D1) {
+                if config.has_resource(&Resource::D1) {
                     let ctx = tera::Context::new();
                     let content = engine.render("drizzle.config.ts", &ctx)?;
                     templates::write_template(&content, &project_dir.join("drizzle.config.ts"))?;
@@ -283,7 +283,7 @@ fn step_write_package_scripts(
                         serde_json::json!("wrangler types"),
                     );
 
-                    if project.has_resource(&Resource::D1) {
+                    if config.has_resource(&Resource::D1) {
                         scripts.insert(
                             "db:generate".to_string(),
                             serde_json::json!("drizzle-kit generate"),
@@ -364,7 +364,7 @@ fn step_write_boilerplate(
                 ui.success(&format!("{}/src/config.ts", project.name));
 
                 // schema.ts for D1
-                if project.has_resource(&Resource::D1) {
+                if config.has_resource(&Resource::D1) {
                     let ctx = tera::Context::new();
                     let content = engine.render("schema.ts", &ctx)?;
                     let db_dir = src_dir.join("db");
@@ -593,13 +593,20 @@ async fn step_db_migrations(
         return Ok(());
     }
 
-    let d1_projects: Vec<_> = config
+    if !config.has_resource(&Resource::D1) {
+        state.mark_complete(step, None);
+        state.save()?;
+        return Ok(());
+    }
+
+    // Run migrations for API workers (they have drizzle schema)
+    let api_workers: Vec<_> = config
         .projects
         .iter()
-        .filter(|p| p.has_resource(&Resource::D1))
+        .filter(|p| p.project_type == ProjectType::ApiWorker)
         .collect();
 
-    if d1_projects.is_empty() {
+    if api_workers.is_empty() {
         state.mark_complete(step, None);
         state.save()?;
         return Ok(());
@@ -608,7 +615,7 @@ async fn step_db_migrations(
     ui.newline();
     ui.section("Database setup:");
 
-    for project in d1_projects {
+    for project in api_workers {
         let project_dir = root.join(&project.name);
 
         ui.run_command(

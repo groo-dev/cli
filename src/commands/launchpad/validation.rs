@@ -102,46 +102,15 @@ fn validate_project(project: &super::config::ProjectConfig, errors: &mut Vec<Str
 
     match project.project_type {
         ProjectType::Web => {
-            if !project.resources.is_empty() {
-                errors.push(format!(
-                    "Project '{}': web projects don't have Cloudflare resource bindings. \
-                     Remove 'resources' or change type to 'api-worker'.",
-                    project.name
-                ));
-            }
             if project.email.is_some() {
                 errors.push(format!(
                     "Project '{}': web projects don't have email integration. \
-                     Remove 'email' or move it to an API worker.",
-                    project.name
-                ));
-            }
-        }
-        ProjectType::LightweightWorker => {
-            if project.auth.is_some() {
-                errors.push(format!(
-                    "Project '{}': lightweight workers don't have auth. \
-                     Remove 'auth' or change type to 'api-worker'.",
-                    project.name
-                ));
-            }
-            if project.email.is_some() {
-                errors.push(format!(
-                    "Project '{}': lightweight workers don't have email integration. \
-                     Remove 'email' or change type to 'api-worker'.",
+                     Remove 'email' or move it to a worker.",
                     project.name
                 ));
             }
         }
         ProjectType::Ios | ProjectType::Android => {
-            if !project.resources.is_empty() {
-                errors.push(format!(
-                    "Project '{}': {} projects don't have Cloudflare resources. \
-                     Remove 'resources'.",
-                    project.name,
-                    project.project_type.label()
-                ));
-            }
             if project.auth.is_some() {
                 errors.push(format!(
                     "Project '{}': {} projects don't have auth configured via launchpad. \
@@ -159,7 +128,7 @@ fn validate_project(project: &super::config::ProjectConfig, errors: &mut Vec<Str
                 ));
             }
         }
-        ProjectType::ApiWorker => {}
+        ProjectType::ApiWorker | ProjectType::LightweightWorker => {}
     }
 }
 

@@ -24,65 +24,58 @@ pub async fn create_resources(
         }
     }
 
-    for project in &config.projects {
-        if !project.is_worker() {
-            continue;
-        }
-
-        let project_dir = root.join(&project.name);
-
-        for resource in &project.resources {
-            match resource {
-                Resource::D1 => {
-                    let name = format!("{}-d1", config.name);
-                    let output = ui
-                        .run_command(
-                            &format!("Created D1 database \"{}\"", name),
-                            &format!("wrangler d1 create {}", name),
-                            &project_dir,
-                        )
-                        .await?;
-                    let id = parse_d1_id(&output).unwrap_or_default();
-                    state.add_resource("d1", &name, &id);
-                    state.save()?;
-                }
-                Resource::R2 => {
-                    let name = format!("{}-r2", config.name);
-                    ui.run_command(
-                        &format!("Created R2 bucket \"{}\"", name),
-                        &format!("wrangler r2 bucket create {}", name),
-                        &project_dir,
+    // Create top-level resources (shared across all workers)
+    for resource in &config.resources {
+        match resource {
+            Resource::D1 => {
+                let name = format!("{}-d1", config.name);
+                let output = ui
+                    .run_command(
+                        &format!("Created D1 database \"{}\"", name),
+                        &format!("wrangler d1 create {}", name),
+                        root,
                     )
                     .await?;
-                    state.add_resource("r2", &name, "");
-                    state.save()?;
-                }
-                Resource::Kv => {
-                    let name = format!("{}-kv", config.name);
-                    let output = ui
-                        .run_command(
-                            &format!("Created KV namespace \"{}\"", name),
-                            &format!("wrangler kv namespace create {}", name),
-                            &project_dir,
-                        )
-                        .await?;
-                    let id = parse_kv_id(&output).unwrap_or_default();
-                    state.add_resource("kv", &name, &id);
-                    state.save()?;
-                }
-                Resource::Queues => {
-                    let name = format!("{}-queue", config.name);
-                    ui.run_command(
-                        &format!("Created Queue \"{}\"", name),
-                        &format!("wrangler queues create {}", name),
-                        &project_dir,
-                    )
-                    .await?;
-                    state.add_resource("queues", &name, "");
-                    state.save()?;
-                }
-                Resource::AiGateway => {}
+                let id = parse_d1_id(&output).unwrap_or_default();
+                state.add_resource("d1", &name, &id);
+                state.save()?;
             }
+            Resource::R2 => {
+                let name = format!("{}-r2", config.name);
+                ui.run_command(
+                    &format!("Created R2 bucket \"{}\"", name),
+                    &format!("wrangler r2 bucket create {}", name),
+                    root,
+                )
+                .await?;
+                state.add_resource("r2", &name, "");
+                state.save()?;
+            }
+            Resource::Kv => {
+                let name = format!("{}-kv", config.name);
+                let output = ui
+                    .run_command(
+                        &format!("Created KV namespace \"{}\"", name),
+                        &format!("wrangler kv namespace create {}", name),
+                        root,
+                    )
+                    .await?;
+                let id = parse_kv_id(&output).unwrap_or_default();
+                state.add_resource("kv", &name, &id);
+                state.save()?;
+            }
+            Resource::Queues => {
+                let name = format!("{}-queue", config.name);
+                ui.run_command(
+                    &format!("Created Queue \"{}\"", name),
+                    &format!("wrangler queues create {}", name),
+                    root,
+                )
+                .await?;
+                state.add_resource("queues", &name, "");
+                state.save()?;
+            }
+            Resource::AiGateway => {}
         }
     }
 
