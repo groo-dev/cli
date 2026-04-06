@@ -22,7 +22,7 @@ pub async fn scaffold_project(
             ui.run_command(
                 "Scaffolded with Cloudflare Worker",
                 &format!(
-                    "npm create cloudflare@latest {} -- --type hello-world --no-git --no-deploy",
+                    "npm create cloudflare@latest {} -- --type hello-world --lang ts --no-git --no-deploy --no-agents -y",
                     project_name
                 ),
                 root,
