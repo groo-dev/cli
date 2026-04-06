@@ -3,6 +3,7 @@ mod deps;
 mod ports;
 mod scaffold;
 mod state;
+mod templates;
 mod ui;
 mod validation;
 
