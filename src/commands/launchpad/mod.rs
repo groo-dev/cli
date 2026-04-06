@@ -1,6 +1,7 @@
 mod config;
 mod deps;
 mod ports;
+mod resources;
 mod scaffold;
 mod state;
 mod templates;
