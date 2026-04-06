@@ -27,6 +27,15 @@ const README_TEMPLATE: &str = include_str!("../../../templates/launchpad/readme.
 const TODO_TEMPLATE: &str = include_str!("../../../templates/launchpad/todo.md.tera");
 const SETTINGS_LOCAL_TEMPLATE: &str =
     include_str!("../../../templates/launchpad/settings.local.json.tera");
+const MAIN_WEB_TEMPLATE: &str = include_str!("../../../templates/launchpad/main-web.tsx.tera");
+const ROOT_ROUTE_TEMPLATE: &str = include_str!("../../../templates/launchpad/root-route.tsx.tera");
+const INDEX_ROUTE_TEMPLATE: &str =
+    include_str!("../../../templates/launchpad/index-route.tsx.tera");
+const AUTH_SCHEMA_TEMPLATE: &str = include_str!("../../../templates/launchpad/auth-schema.ts.tera");
+const AUTH_MIDDLEWARE_CLERK_TEMPLATE: &str =
+    include_str!("../../../templates/launchpad/auth-middleware-clerk.ts.tera");
+const AUTH_MIDDLEWARE_BETTER_AUTH_TEMPLATE: &str =
+    include_str!("../../../templates/launchpad/auth-middleware-better-auth.ts.tera");
 
 pub struct TemplateEngine {
     tera: Tera,
@@ -53,6 +62,15 @@ impl TemplateEngine {
         tera.add_raw_template("readme.md", README_TEMPLATE)?;
         tera.add_raw_template("todo.md", TODO_TEMPLATE)?;
         tera.add_raw_template("settings.local.json", SETTINGS_LOCAL_TEMPLATE)?;
+        tera.add_raw_template("main-web.tsx", MAIN_WEB_TEMPLATE)?;
+        tera.add_raw_template("root-route.tsx", ROOT_ROUTE_TEMPLATE)?;
+        tera.add_raw_template("index-route.tsx", INDEX_ROUTE_TEMPLATE)?;
+        tera.add_raw_template("auth-schema.ts", AUTH_SCHEMA_TEMPLATE)?;
+        tera.add_raw_template("auth-middleware-clerk.ts", AUTH_MIDDLEWARE_CLERK_TEMPLATE)?;
+        tera.add_raw_template(
+            "auth-middleware-better-auth.ts",
+            AUTH_MIDDLEWARE_BETTER_AUTH_TEMPLATE,
+        )?;
 
         Ok(Self { tera })
     }
@@ -100,7 +118,23 @@ impl TemplateEngine {
         ctx.insert("port", &port);
         ctx.insert("has_tailwind", &project.has_feature_type("tailwind"));
         ctx.insert("has_axios", &project.has_feature_type("axios"));
+        ctx.insert("has_tanstack_router", &project.has_feature_type("tanstack-router"));
+        ctx.insert("has_shadcn", &project.has_feature_type("shadcn"));
         ctx.insert("api_port", &api_port);
+        ctx
+    }
+
+    /// Build context for a web project's main.tsx
+    pub fn main_web_context(&self, project: &ProjectConfig) -> Context {
+        let mut ctx = Context::new();
+        ctx.insert(
+            "has_tanstack_router",
+            &project.has_feature_type("tanstack-router"),
+        );
+        ctx.insert(
+            "has_tanstack_query",
+            &project.has_feature_type("tanstack-query"),
+        );
         ctx
     }
 

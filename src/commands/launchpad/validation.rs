@@ -1,4 +1,4 @@
-use super::config::{Feature, LaunchpadConfig, ProjectType};
+use super::config::{AuthProvider, Feature, LaunchpadConfig, ProjectType, Resource};
 use std::collections::HashSet;
 use std::path::Path;
 
@@ -12,6 +12,26 @@ pub fn validate(config: &LaunchpadConfig, root: &Path) -> Vec<String> {
 
     for project in &config.projects {
         validate_project(project, &mut errors);
+    }
+
+    // Cross-cutting: auth providers that require D1
+    for project in &config.projects {
+        if let Some(provider) = project.auth_provider()
+            && matches!(provider, AuthProvider::BetterAuth | AuthProvider::Simple)
+            && !config.has_resource(&Resource::D1)
+        {
+            let label = match provider {
+                AuthProvider::BetterAuth => "better-auth",
+                AuthProvider::Simple => "simple",
+                _ => unreachable!(),
+            };
+            errors.push(format!(
+                "Auth provider '{}' requires D1 for storing user data. \
+                 Add \"d1\" to the top-level resources array.",
+                label
+            ));
+            break;
+        }
     }
 
     errors
@@ -144,6 +164,39 @@ fn validate_project(project: &super::config::ProjectConfig, errors: &mut Vec<Str
             }
             _ => {}
         }
+    }
+
+    // auth(better-auth) requires drizzle on the same worker
+    if let Some(AuthProvider::BetterAuth) = project.auth_provider()
+        && project.project_type == ProjectType::Worker
+        && !project.has_feature_type("drizzle")
+    {
+        errors.push(format!(
+            "Project '{}': auth provider 'better-auth' requires the 'drizzle' feature. \
+             Add {{ \"type\": \"drizzle\" }} to features.",
+            project.name
+        ));
+    }
+
+    // auth(simple) requires drizzle on the same worker
+    if let Some(AuthProvider::Simple) = project.auth_provider()
+        && project.project_type == ProjectType::Worker
+        && !project.has_feature_type("drizzle")
+    {
+        errors.push(format!(
+            "Project '{}': auth provider 'simple' requires the 'drizzle' feature. \
+             Add {{ \"type\": \"drizzle\" }} to features.",
+            project.name
+        ));
+    }
+
+    // shadcn requires tailwind
+    if project.has_feature_type("shadcn") && !project.has_feature_type("tailwind") {
+        errors.push(format!(
+            "Project '{}': 'shadcn' feature requires 'tailwind'. \
+             Add {{ \"type\": \"tailwind\" }} to features.",
+            project.name
+        ));
     }
 }
 

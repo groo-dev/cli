@@ -1,4 +1,4 @@
-use super::config::{LaunchpadConfig, ProjectType};
+use super::config::{AuthProvider, LaunchpadConfig, ProjectType};
 use super::deps;
 use super::ports;
 use super::resources;
@@ -31,6 +31,7 @@ pub async fn run_pipeline(
     for project in &config.projects {
         step_scaffold_project(config, project, root, state, ui).await?;
         step_install_deps(config, project, root, state, ui).await?;
+        step_shadcn_init(project, root, state, ui).await?;
     }
 
     // Step 4: Generate ports
@@ -131,6 +132,38 @@ async fn step_install_deps(
 
     let project_dir = root.join(&project.name);
     deps::install_deps(ui, project, &project_dir).await?;
+
+    state.mark_complete(step, Some(&project.name));
+    state.save()?;
+    Ok(())
+}
+
+async fn step_shadcn_init(
+    project: &super::config::ProjectConfig,
+    root: &Path,
+    state: &mut LaunchpadState,
+    ui: &Ui,
+) -> Result<()> {
+    if !project.has_feature_type("shadcn") {
+        return Ok(());
+    }
+
+    let step = "shadcn_init";
+    if state.is_step_complete(step, Some(&project.name)) {
+        ui.skipped(&format!("shadcn init for {}", project.name));
+        return Ok(());
+    }
+
+    let project_dir = root.join(&project.name);
+    ui.run_command(
+        &format!("Initialized shadcn for {}", project.name),
+        &format!(
+            "npx shadcn@latest init -d -y -c {}",
+            project_dir.display()
+        ),
+        &project_dir,
+    )
+    .await?;
 
     state.mark_complete(step, Some(&project.name));
     state.save()?;
@@ -354,7 +387,21 @@ fn step_write_boilerplate(
 
                 // Hono entry point (if hono feature)
                 if project.has_feature_type("hono") {
-                    let ctx = tera::Context::new();
+                    let mut ctx = tera::Context::new();
+                    ctx.insert(
+                        "has_auth_clerk",
+                        &matches!(
+                            project.auth_provider(),
+                            Some(AuthProvider::Clerk)
+                        ),
+                    );
+                    ctx.insert(
+                        "has_auth_better_auth",
+                        &matches!(
+                            project.auth_provider(),
+                            Some(AuthProvider::BetterAuth)
+                        ),
+                    );
                     let content = engine.render("hono-entry.ts", &ctx)?;
                     templates::write_template(&content, &src_dir.join("index.ts"))?;
                     ui.success(&format!("{}/src/index.ts (Hono entry)", project.name));
@@ -375,9 +422,90 @@ fn step_write_boilerplate(
                     templates::write_template(&content, &db_dir.join("schema.ts"))?;
                     ui.success(&format!("{}/src/db/schema.ts", project.name));
                 }
+
+                // auth schema (if auth(better-auth) + drizzle)
+                if matches!(project.auth_provider(), Some(AuthProvider::BetterAuth))
+                    && project.has_feature_type("drizzle")
+                {
+                    let ctx = tera::Context::new();
+                    let content = engine.render("auth-schema.ts", &ctx)?;
+                    let schema_dir = src_dir.join("db").join("schema");
+                    std::fs::create_dir_all(&schema_dir)?;
+                    templates::write_template(&content, &schema_dir.join("auth.ts"))?;
+                    ui.success(&format!(
+                        "{}/src/db/schema/auth.ts (Better Auth schema)",
+                        project.name
+                    ));
+                }
+
+                // auth middleware (if hono + auth)
+                if project.has_feature_type("hono") {
+                    if matches!(project.auth_provider(), Some(AuthProvider::Clerk)) {
+                        let ctx = tera::Context::new();
+                        let content = engine.render("auth-middleware-clerk.ts", &ctx)?;
+                        let middleware_dir = src_dir.join("middleware");
+                        std::fs::create_dir_all(&middleware_dir)?;
+                        templates::write_template(
+                            &content,
+                            &middleware_dir.join("auth.ts"),
+                        )?;
+                        ui.success(&format!(
+                            "{}/src/middleware/auth.ts (Clerk)",
+                            project.name
+                        ));
+                    } else if matches!(
+                        project.auth_provider(),
+                        Some(AuthProvider::BetterAuth)
+                    ) {
+                        let ctx = tera::Context::new();
+                        let content =
+                            engine.render("auth-middleware-better-auth.ts", &ctx)?;
+                        let middleware_dir = src_dir.join("middleware");
+                        std::fs::create_dir_all(&middleware_dir)?;
+                        templates::write_template(
+                            &content,
+                            &middleware_dir.join("auth.ts"),
+                        )?;
+                        ui.success(&format!(
+                            "{}/src/middleware/auth.ts (Better Auth)",
+                            project.name
+                        ));
+                    }
+                }
             }
             ProjectType::Web => {
                 let src_dir = project_dir.join("src");
+
+                // main.tsx (overwrite Vite-scaffolded one)
+                let ctx = engine.main_web_context(project);
+                let content = engine.render("main-web.tsx", &ctx)?;
+                templates::write_template(&content, &src_dir.join("main.tsx"))?;
+                ui.success(&format!("{}/src/main.tsx", project.name));
+
+                // TanStack Router routes
+                if project.has_feature_type("tanstack-router") {
+                    let routes_dir = src_dir.join("routes");
+                    std::fs::create_dir_all(&routes_dir)?;
+
+                    let ctx = tera::Context::new();
+                    let content = engine.render("root-route.tsx", &ctx)?;
+                    templates::write_template(&content, &routes_dir.join("__root.tsx"))?;
+                    ui.success(&format!("{}/src/routes/__root.tsx", project.name));
+
+                    let content = engine.render("index-route.tsx", &ctx)?;
+                    templates::write_template(&content, &routes_dir.join("index.tsx"))?;
+                    ui.success(&format!("{}/src/routes/index.tsx", project.name));
+
+                    // Delete Vite-scaffolded files replaced by router
+                    let app_tsx = src_dir.join("App.tsx");
+                    if app_tsx.exists() {
+                        std::fs::remove_file(&app_tsx)?;
+                    }
+                    let app_css = src_dir.join("App.css");
+                    if app_css.exists() {
+                        std::fs::remove_file(&app_css)?;
+                    }
+                }
 
                 // axios client (if axios feature)
                 if project.has_feature_type("axios") {

@@ -22,14 +22,12 @@ async fn install_web_deps(ui: &Ui, project: &ProjectConfig, dir: &Path) -> Resul
                 dev_deps.push("@tailwindcss/vite");
             }
             Feature::Shadcn => {
-                // shadcn init is handled separately in the pipeline
-                deps.push("clsx");
-                deps.push("tailwind-merge");
-                deps.push("class-variance-authority");
+                // shadcn init handles clsx, tailwind-merge, class-variance-authority
                 deps.push("lucide-react");
             }
             Feature::TanstackRouter => {
                 deps.push("@tanstack/react-router");
+                dev_deps.push("@tanstack/router-plugin");
             }
             Feature::TanstackQuery => {
                 deps.push("@tanstack/react-query");
@@ -42,6 +40,7 @@ async fn install_web_deps(ui: &Ui, project: &ProjectConfig, dir: &Path) -> Resul
             } => {
                 deps.push("@clerk/clerk-react");
                 deps.push("@clerk/themes");
+                deps.push("@hono/clerk-auth");
             }
             Feature::Auth {
                 provider: AuthProvider::BetterAuth,
@@ -89,7 +88,13 @@ async fn install_worker_deps(ui: &Ui, project: &ProjectConfig, dir: &Path) -> Re
             Feature::Auth {
                 provider: AuthProvider::Clerk,
             } => {
+                deps.push("@hono/clerk-auth");
                 deps.push("@clerk/backend");
+            }
+            Feature::Auth {
+                provider: AuthProvider::BetterAuth,
+            } => {
+                deps.push("better-auth");
             }
             Feature::Email {
                 provider: EmailProvider::Resend,
