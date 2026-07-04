@@ -252,7 +252,14 @@ struct DeviceAuthResponse {
     verification_uri: String,
     verification_uri_complete: String,
     expires_in: u64,
+    /// Minimum poll interval in seconds. RFC 8628 §3.2 makes this OPTIONAL
+    /// with a default of 5 — tolerate servers that omit it.
+    #[serde(default = "default_device_interval")]
     interval: u64,
+}
+
+fn default_device_interval() -> u64 {
+    5
 }
 
 /// `groo auth login --device`: RFC 8628 device authorization flow for
@@ -375,32 +382,54 @@ fn next_poll_action(error: &str, interval: u64) -> PollAction {
 }
 
 /// Shared success path for both the loopback and device OAuth flows: save
-/// the new tokens, resolve the user's email via `/v1/oauth/userinfo` (the
-/// access token carries `openid`+`email` scope, not a PAT, so `/v1/auth/me`
-/// won't accept it), and print a confirmation.
+/// the new tokens FIRST, then resolve the user's email via
+/// `/v1/oauth/userinfo` (the access token carries `openid`+`email` scope,
+/// not a PAT, so `/v1/auth/me` won't accept it) as best-effort decoration.
+/// Once the token exchange has succeeded, login must succeed: a transient
+/// userinfo failure must never discard freshly issued tokens (for
+/// `--device` that would mean redoing the whole human approval).
 async fn finish_login(tok: TokenResponse) -> Result<()> {
-    let user_email = fetch_userinfo_email(&tok.access_token).await?;
     let expires_at = tok
         .expires_in
         .map(|secs| chrono::Utc::now().timestamp() + secs);
 
-    let auth = AuthState {
+    let mut auth = AuthState {
         access_token: tok.access_token,
         refresh_token: tok.refresh_token,
         token_type: "oauth".to_string(),
         expires_at,
-        user_email: Some(user_email.clone()),
+        user_email: None,
     };
     save_auth(&auth)?;
+
+    // Best-effort: decorate the stored state with the user's email. Failing
+    // here only costs the "Logged in as <email>" nicety, never the login.
+    let user_email = match fetch_userinfo_email(&auth.access_token).await {
+        Ok(email) => {
+            auth.user_email = Some(email.clone());
+            save_auth(&auth)?;
+            Some(email)
+        }
+        Err(_) => {
+            println!(
+                "{}",
+                style("! could not fetch your profile (login still succeeded)").yellow()
+            );
+            None
+        }
+    };
 
     if let Some(scope) = &tok.scope {
         println!("Granted scopes: {}", style(scope).dim());
     }
-    println!(
-        "\n{} Logged in as {}",
-        style("✓").green(),
-        style(&user_email).cyan()
-    );
+    match &user_email {
+        Some(email) => println!(
+            "\n{} Logged in as {}",
+            style("✓").green(),
+            style(email).cyan()
+        ),
+        None => println!("\n{} Logged in", style("✓").green()),
+    }
 
     Ok(())
 }
@@ -460,5 +489,33 @@ mod device_flow_tests {
     #[test]
     fn unrecognized_error_falls_through_to_unknown() {
         assert_eq!(next_poll_action("temporarily_unavailable", 5), PollAction::Unknown);
+    }
+
+    #[test]
+    fn device_auth_response_interval_defaults_to_five_when_omitted() {
+        // RFC 8628 §3.2: `interval` is OPTIONAL, default 5 seconds.
+        let json = r#"{
+            "device_code": "dc",
+            "user_code": "BCDF-GHJK",
+            "verification_uri": "https://accounts.groo.dev/device",
+            "verification_uri_complete": "https://accounts.groo.dev/device?user_code=BCDF-GHJK",
+            "expires_in": 600
+        }"#;
+        let dev: DeviceAuthResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(dev.interval, 5);
+    }
+
+    #[test]
+    fn device_auth_response_uses_server_interval_when_present() {
+        let json = r#"{
+            "device_code": "dc",
+            "user_code": "BCDF-GHJK",
+            "verification_uri": "https://accounts.groo.dev/device",
+            "verification_uri_complete": "https://accounts.groo.dev/device?user_code=BCDF-GHJK",
+            "expires_in": 600,
+            "interval": 7
+        }"#;
+        let dev: DeviceAuthResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(dev.interval, 7);
     }
 }
