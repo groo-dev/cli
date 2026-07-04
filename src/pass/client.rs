@@ -25,7 +25,7 @@ impl PassClient {
         let resp = self
             .client
             .get(format!("{}/vault/key-info", PASS_API_URL))
-            .header("Cookie", format!("session={}", self.token))
+            .bearer_auth(&self.token)
             .send()
             .await?;
 
@@ -53,7 +53,7 @@ impl PassClient {
         let resp = self
             .client
             .get(format!("{}/vault", PASS_API_URL))
-            .header("Cookie", format!("session={}", self.token))
+            .bearer_auth(&self.token)
             .send()
             .await?;
 
@@ -112,7 +112,7 @@ impl PassClient {
         let resp = self
             .client
             .put(format!("{}/vault", PASS_API_URL))
-            .header("Cookie", format!("session={}", self.token))
+            .bearer_auth(&self.token)
             .json(&serde_json::json!({
                 "encryptedData": encrypted_data,
                 "iv": iv,

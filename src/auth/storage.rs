@@ -130,8 +130,19 @@ pub fn clear_auth() -> Result<()> {
         },
         Err(e) => Err(e),
     };
-    if file_override.is_none() {
-        keyring_result?;
+    match (&file_override, &keyring_result) {
+        (None, _) => {
+            keyring_result?;
+        }
+        (Some(_), Err(e)) => {
+            // GROO_TOKEN_FILE is the active backend, so a keyring failure
+            // here is best-effort cleanup, not fatal — but silently
+            // swallowing a *real* error (anything other than "no entry",
+            // which is already mapped to `Ok(())` above) could leave a
+            // credential sitting in the OS keychain with no visible trace.
+            println!("! could not clear the OS keychain entry as well: {e}");
+        }
+        (Some(_), Ok(())) => {}
     }
 
     // Token file: delete whenever the path is resolvable, regardless of
@@ -145,6 +156,15 @@ pub fn clear_auth() -> Result<()> {
 
     remove_legacy_files()?;
     Ok(())
+}
+
+/// Human-readable description of whichever backend is currently active for
+/// storing credentials, for `groo auth status`.
+pub fn backend_description() -> String {
+    match token_file_override() {
+        Some(path) => format!("{GROO_TOKEN_FILE_ENV} ({})", path.display()),
+        None => keyring_backend_name().to_string(),
+    }
 }
 
 fn token_file_override() -> Option<PathBuf> {

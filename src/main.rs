@@ -353,7 +353,7 @@ async fn main() -> Result<()> {
                 commands::auth::login::run(pat, device, token_file).await
             }
             AuthCommands::Status => commands::auth::status::run(),
-            AuthCommands::Logout => commands::auth::logout::run(),
+            AuthCommands::Logout => commands::auth::logout::run().await,
         },
         Commands::Pad { command } => match command {
             PadCommands::Add { text, files } => commands::pad::add::run(text, files).await,

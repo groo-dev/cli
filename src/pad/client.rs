@@ -30,7 +30,7 @@ impl PadClient {
         // Connect to WebSocket
         let request = http::Request::builder()
             .uri(PAD_WS_URL)
-            .header("Cookie", format!("session={}", self.token))
+            .header("Authorization", format!("Bearer {}", self.token))
             .header("Host", "pad.groo.dev")
             .header("Upgrade", "websocket")
             .header("Connection", "Upgrade")
@@ -137,7 +137,7 @@ impl PadClient {
 
         let resp = client
             .post(format!("{}/files", PAD_API_URL))
-            .header("Cookie", format!("session={}", self.token))
+            .bearer_auth(&self.token)
             .multipart(form)
             .send()
             .await?;
@@ -172,7 +172,7 @@ impl PadClient {
     pub async fn connect_and_sync(&self, password: &str) -> Result<(UserState, [u8; 32])> {
         let request = http::Request::builder()
             .uri(PAD_WS_URL)
-            .header("Cookie", format!("session={}", self.token))
+            .header("Authorization", format!("Bearer {}", self.token))
             .header("Host", "pad.groo.dev")
             .header("Upgrade", "websocket")
             .header("Connection", "Upgrade")
@@ -219,7 +219,7 @@ impl PadClient {
     pub async fn fetch_state(&self) -> Result<UserState> {
         let request = http::Request::builder()
             .uri(PAD_WS_URL)
-            .header("Cookie", format!("session={}", self.token))
+            .header("Authorization", format!("Bearer {}", self.token))
             .header("Host", "pad.groo.dev")
             .header("Upgrade", "websocket")
             .header("Connection", "Upgrade")
@@ -254,7 +254,7 @@ impl PadClient {
         let client = reqwest::Client::new();
         let resp = client
             .get(format!("{}/files/{}", PAD_API_URL, r2_key))
-            .header("Cookie", format!("session={}", self.token))
+            .bearer_auth(&self.token)
             .send()
             .await?;
 

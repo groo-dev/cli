@@ -1,7 +1,7 @@
 use anyhow::Result;
 use console::style;
 
-use crate::auth::storage::load_auth;
+use crate::auth::storage::{backend_description, load_auth};
 
 pub fn run() -> Result<()> {
     match load_auth()? {
@@ -13,6 +13,7 @@ pub fn run() -> Result<()> {
             }
 
             println!("  Auth type: {}", auth.token_type);
+            println!("  Storage: {}", backend_description());
 
             if let Some(expires_at) = auth.expires_at {
                 let now = chrono::Utc::now().timestamp();
@@ -24,10 +25,13 @@ pub fn run() -> Result<()> {
                     let mins = (remaining % 3600) / 60;
                     println!("  Expires in: {}h {}m", hours, mins);
                 }
+            } else if auth.token_type == "pat" {
+                println!("  Expires: never (personal access token)");
             }
         }
         None => {
             println!("{} Not logged in", style("✗").red());
+            println!("  Storage: {}", backend_description());
             println!("\nRun {} to authenticate", style("groo auth login").cyan());
         }
     }

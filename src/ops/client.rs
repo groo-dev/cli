@@ -23,7 +23,7 @@ impl OpsClient {
         let response = self
             .client
             .get(format!("{}/v1/apps", OPS_API_URL))
-            .header("Cookie", format!("session={}", self.token))
+            .bearer_auth(&self.token)
             .send()
             .await
             .context("Failed to fetch apps")?;
@@ -43,7 +43,7 @@ impl OpsClient {
         let response = self
             .client
             .get(format!("{}/v1/apps/{}", OPS_API_URL, app_id))
-            .header("Cookie", format!("session={}", self.token))
+            .bearer_auth(&self.token)
             .send()
             .await
             .context("Failed to fetch app")?;
@@ -65,7 +65,7 @@ impl OpsClient {
                 "{}/v1/apps/{}/config?environment={}",
                 OPS_API_URL, app_id, environment
             ))
-            .header("Cookie", format!("session={}", self.token))
+            .bearer_auth(&self.token)
             .send()
             .await
             .context("Failed to fetch config")?;
@@ -87,7 +87,7 @@ impl OpsClient {
         let response = self
             .client
             .post(format!("{}/v1/apps/{}/config", OPS_API_URL, app_id))
-            .header("Cookie", format!("session={}", self.token))
+            .bearer_auth(&self.token)
             .json(&request)
             .send()
             .await
@@ -116,7 +116,7 @@ impl OpsClient {
                 "{}/v1/apps/{}/config/{}",
                 OPS_API_URL, app_id, config_id
             ))
-            .header("Cookie", format!("session={}", self.token))
+            .bearer_auth(&self.token)
             .json(&request)
             .send()
             .await
@@ -140,7 +140,7 @@ impl OpsClient {
                 "{}/v1/apps/{}/config/{}",
                 OPS_API_URL, app_id, config_id
             ))
-            .header("Cookie", format!("session={}", self.token))
+            .bearer_auth(&self.token)
             .send()
             .await
             .context("Failed to delete config")?;
@@ -168,7 +168,7 @@ impl OpsClient {
         let response = self
             .client
             .post(format!("{}/v1/apps/{}/secrets/enable", OPS_API_URL, app_id))
-            .header("Cookie", format!("session={}", self.token))
+            .bearer_auth(&self.token)
             .json(&request)
             .send()
             .await
@@ -198,7 +198,7 @@ impl OpsClient {
         let response = self
             .client
             .post(format!("{}/v1/apps/{}/secrets/reset", OPS_API_URL, app_id))
-            .header("Cookie", format!("session={}", self.token))
+            .bearer_auth(&self.token)
             .json(&request)
             .send()
             .await

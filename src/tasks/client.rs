@@ -60,7 +60,7 @@ impl TasksClient {
         let response = self
             .client
             .get(format!("{}/v1/projects", self.base_url))
-            .header("Cookie", format!("session={}", self.token))
+            .bearer_auth(&self.token)
             .send()
             .await
             .context("Failed to fetch projects")?;
@@ -80,7 +80,7 @@ impl TasksClient {
         let response = self
             .client
             .get(format!("{}/v1/projects/{}", self.base_url, project_id))
-            .header("Cookie", format!("session={}", self.token))
+            .bearer_auth(&self.token)
             .send()
             .await
             .context("Failed to fetch project")?;
@@ -98,7 +98,7 @@ impl TasksClient {
         let response = self
             .client
             .post(format!("{}/v1/projects", self.base_url))
-            .header("Cookie", format!("session={}", self.token))
+            .bearer_auth(&self.token)
             .json(&request)
             .send()
             .await
@@ -148,7 +148,7 @@ impl TasksClient {
         let response = self
             .client
             .get(&url)
-            .header("Cookie", format!("session={}", self.token))
+            .bearer_auth(&self.token)
             .send()
             .await
             .context("Failed to fetch tasks")?;
@@ -167,7 +167,7 @@ impl TasksClient {
         let response = self
             .client
             .get(format!("{}/v1/tasks/search?q={}", self.base_url, urlencoding::encode(query)))
-            .header("Cookie", format!("session={}", self.token))
+            .bearer_auth(&self.token)
             .send()
             .await
             .context("Failed to search tasks")?;
@@ -186,7 +186,7 @@ impl TasksClient {
         let response = self
             .client
             .get(format!("{}/v1/tasks/{}", self.base_url, task_id))
-            .header("Cookie", format!("session={}", self.token))
+            .bearer_auth(&self.token)
             .send()
             .await
             .context("Failed to fetch task")?;
@@ -204,7 +204,7 @@ impl TasksClient {
         let response = self
             .client
             .post(format!("{}/v1/tasks", self.base_url))
-            .header("Cookie", format!("session={}", self.token))
+            .bearer_auth(&self.token)
             .json(&request)
             .send()
             .await
@@ -233,7 +233,7 @@ impl TasksClient {
         let response = self
             .client
             .put(format!("{}/v1/tasks/{}", self.base_url, task_id))
-            .header("Cookie", format!("session={}", self.token))
+            .bearer_auth(&self.token)
             .json(&request)
             .send()
             .await
@@ -254,7 +254,7 @@ impl TasksClient {
         let response = self
             .client
             .delete(format!("{}/v1/tasks/{}", self.base_url, task_id))
-            .header("Cookie", format!("session={}", self.token))
+            .bearer_auth(&self.token)
             .send()
             .await
             .context("Failed to delete task")?;
@@ -276,7 +276,7 @@ impl TasksClient {
         let response = self
             .client
             .post(format!("{}/v1/tasks/{}/start", self.base_url, task_id))
-            .header("Cookie", format!("session={}", self.token))
+            .bearer_auth(&self.token)
             .send()
             .await
             .context("Failed to start task")?;
@@ -295,7 +295,7 @@ impl TasksClient {
         let response = self
             .client
             .post(format!("{}/v1/tasks/{}/done", self.base_url, task_id))
-            .header("Cookie", format!("session={}", self.token))
+            .bearer_auth(&self.token)
             .send()
             .await
             .context("Failed to complete task")?;
@@ -314,7 +314,7 @@ impl TasksClient {
         let response = self
             .client
             .post(format!("{}/v1/tasks/{}/archive", self.base_url, task_id))
-            .header("Cookie", format!("session={}", self.token))
+            .bearer_auth(&self.token)
             .send()
             .await
             .context("Failed to archive task")?;
@@ -337,7 +337,7 @@ impl TasksClient {
         let response = self
             .client
             .post(format!("{}/v1/tasks/{}/comments", self.base_url, task_id))
-            .header("Cookie", format!("session={}", self.token))
+            .bearer_auth(&self.token)
             .json(&request)
             .send()
             .await
