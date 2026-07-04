@@ -41,7 +41,14 @@ pub struct AuthState {
 /// Load the stored auth state, if any.
 pub fn load_auth() -> Result<Option<AuthState>> {
     if let Some(path) = token_file_override() {
-        return load_from_token_file(&path);
+        let state = load_from_token_file(&path)?;
+        // Same legacy detection as the keyring path: an empty token file
+        // store with only the old encrypted files on disk means "old
+        // format", not "never logged in".
+        if state.is_none() && legacy_files_exist() {
+            bail!(legacy_format_message());
+        }
+        return Ok(state);
     }
 
     let entry = keyring_entry()?;
@@ -102,20 +109,38 @@ pub fn has_stored_auth() -> bool {
     legacy_files_exist()
 }
 
-/// Clear the stored auth state (keychain entry, token file, and any legacy
-/// files), leaving the user fully logged out.
+/// Clear the stored auth state, leaving the user fully logged out.
+///
+/// Unlike `save_auth` (which writes only the active backend), clearing is
+/// deliberately exhaustive: it deletes the keyring entry AND, when a
+/// `GROO_TOKEN_FILE` path is resolvable, that file too — plus any legacy
+/// files. Otherwise a logout run without the env var would leave a still-
+/// valid plaintext token file behind from an earlier env-var session (or a
+/// stale keyring entry in the reverse case).
 pub fn clear_auth() -> Result<()> {
-    if let Some(path) = token_file_override() {
-        if path.exists() {
-            std::fs::remove_file(&path)
-                .with_context(|| format!("failed to remove token file at {}", path.display()))?;
-        }
-    } else {
-        let entry = keyring_entry()?;
-        match entry.delete_credential() {
-            Ok(()) | Err(keyring::Error::NoEntry) => {}
-            Err(e) => bail!(keyring_failure_message("clear", &e)),
-        }
+    let file_override = token_file_override();
+
+    // Keyring entry: fatal only when the keyring is the active backend.
+    // In GROO_TOKEN_FILE mode the keyring is often unusable (that's the
+    // usual reason the override is set), so there it's best-effort.
+    let keyring_result = match keyring_entry() {
+        Ok(entry) => match entry.delete_credential() {
+            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+            Err(e) => Err(anyhow!(keyring_failure_message("clear", &e))),
+        },
+        Err(e) => Err(e),
+    };
+    if file_override.is_none() {
+        keyring_result?;
+    }
+
+    // Token file: delete whenever the path is resolvable, regardless of
+    // which backend is currently active.
+    if let Some(path) = file_override
+        && path.exists()
+    {
+        std::fs::remove_file(&path)
+            .with_context(|| format!("failed to remove token file at {}", path.display()))?;
     }
 
     remove_legacy_files()?;
@@ -144,9 +169,16 @@ fn load_from_token_file(path: &Path) -> Result<Option<AuthState>> {
     Ok(Some(state))
 }
 
-/// Write `contents` to `path` and lock it down to owner-only permissions on
-/// unix. Split out from `save_auth` so the permission behavior is directly
+/// Write `contents` to `path` with owner-only permissions on unix. Split
+/// out from `save_auth` so the permission behavior is directly
 /// unit-testable without touching the keychain or real config dir.
+///
+/// On unix the file is *created* with mode 0600 (via `OpenOptionsExt::mode`)
+/// rather than written then chmod-ed, so there is no window where the token
+/// sits on disk with umask-default (typically 0644) permissions — this path
+/// runs on every token refresh, not just login. `mode()` only applies at
+/// creation, so a pre-existing looser file is tightened via the open handle
+/// before any bytes are written.
 fn write_token_file(path: &Path, contents: &str) -> Result<()> {
     if let Some(parent) = path.parent()
         && !parent.as_os_str().is_empty()
@@ -154,14 +186,31 @@ fn write_token_file(path: &Path, contents: &str) -> Result<()> {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("failed to create directory for {}", path.display()))?;
     }
-    std::fs::write(path, contents)
-        .with_context(|| format!("failed to write token file at {}", path.display()))?;
 
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+        use std::io::Write;
+        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(path)
+            .with_context(|| format!("failed to open token file at {}", path.display()))?;
+        // Tighten a pre-existing file (mode() is ignored when the file
+        // already exists). Done on the handle — no path-based TOCTOU.
+        file.set_permissions(std::fs::Permissions::from_mode(0o600))
             .with_context(|| format!("failed to set permissions on {}", path.display()))?;
+        file.write_all(contents.as_bytes())
+            .with_context(|| format!("failed to write token file at {}", path.display()))?;
+    }
+
+    #[cfg(not(unix))]
+    {
+        std::fs::write(path, contents)
+            .with_context(|| format!("failed to write token file at {}", path.display()))?;
     }
 
     Ok(())
@@ -220,23 +269,60 @@ fn remove_legacy_files() -> Result<()> {
 mod tests {
     use super::*;
 
-    #[test]
     #[cfg(unix)]
-    fn token_file_gets_owner_only_permissions() {
-        use std::os::unix::fs::PermissionsExt;
-
+    fn test_dir(label: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
-            "groo-cli-storage-test-{}-{}",
-            std::process::id(),
-            "token-perms"
+            "groo-cli-storage-test-{}-{label}",
+            std::process::id()
         ));
         std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("token.json");
+        dir
+    }
 
+    #[test]
+    #[cfg(unix)]
+    fn token_file_created_with_owner_only_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = test_dir("token-perms");
+        let path = dir.join("token.json");
+        assert!(!path.exists());
+
+        // Fresh creation: the file must be born 0600 (created with mode via
+        // OpenOptionsExt, not chmod-ed after the fact).
         write_token_file(&path, r#"{"access_token":"x"}"#).unwrap();
 
         let mode = std::fs::metadata(&path).unwrap().permissions().mode();
         assert_eq!(mode & 0o777, 0o600);
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            r#"{"access_token":"x"}"#
+        );
+
+        std::fs::remove_file(&path).ok();
+        std::fs::remove_dir(&dir).ok();
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn token_file_rewrite_tightens_preexisting_loose_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = test_dir("token-perms-tighten");
+        let path = dir.join("token.json");
+
+        // Simulate a file left behind with umask-default permissions.
+        std::fs::write(&path, "old").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+
+        write_token_file(&path, r#"{"access_token":"y"}"#).unwrap();
+
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            r#"{"access_token":"y"}"#
+        );
 
         std::fs::remove_file(&path).ok();
         std::fs::remove_dir(&dir).ok();
