@@ -1,11 +1,18 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use console::style;
+use std::path::PathBuf;
 
-use crate::auth::storage::AuthState;
+use crate::auth::storage::{save_auth, AuthState};
+use crate::auth::{accounts_url, CLIENT_ID, OAUTH_SCOPES};
 
-const ACCOUNTS_BASE_URL: &str = "https://accounts.groo.dev";
+pub async fn run(use_pat: bool, token_file: Option<PathBuf>) -> Result<()> {
+    if let Some(path) = token_file {
+        bail!(
+            "--token-file is not supported on login: set GROO_TOKEN_FILE={} instead (it must be present for every command)",
+            path.display()
+        );
+    }
 
-pub async fn run(use_pat: bool) -> Result<()> {
     if use_pat {
         login_with_pat().await
     } else {
@@ -42,19 +49,6 @@ async fn login_with_pat() -> Result<()> {
     let user_email = validate_token(&token).await?;
     println!("{}", style("OK").green());
 
-    // Prompt for master password
-    let master_password = if AuthState::exists() {
-        rpassword::prompt_password("Master password: ")?
-    } else {
-        println!("\nSet a master password to encrypt your credentials.");
-        let password = rpassword::prompt_password("New master password: ")?;
-        let confirm = rpassword::prompt_password("Confirm master password: ")?;
-        if password != confirm {
-            return Err(anyhow!("Passwords don't match"));
-        }
-        password
-    };
-
     // Save auth state
     let auth = AuthState {
         access_token: token,
@@ -63,7 +57,7 @@ async fn login_with_pat() -> Result<()> {
         expires_at: None,
         user_email: Some(user_email.clone()),
     };
-    auth.save(&master_password)?;
+    save_auth(&auth)?;
 
     println!(
         "\n{} Logged in as {}",
@@ -77,7 +71,7 @@ async fn login_with_pat() -> Result<()> {
 async fn validate_token(token: &str) -> Result<String> {
     let client = reqwest::Client::new();
     let resp = client
-        .get(format!("{}/v1/auth/me", ACCOUNTS_BASE_URL))
+        .get(format!("{}/v1/auth/me", accounts_url()))
         .bearer_auth(token)
         .send()
         .await?;
@@ -107,7 +101,6 @@ async fn login_with_oauth() -> Result<()> {
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
     use tokio::net::TcpListener;
 
-    const CLIENT_ID: &str = "groo-cli";
     const REDIRECT_PORT: u16 = 9876;
 
     println!("Login with Groo Account\n");
@@ -132,12 +125,13 @@ async fn login_with_oauth() -> Result<()> {
 
     // Build auth URL
     let auth_url = format!(
-        "{}/v1/oauth/authorize?client_id={}&redirect_uri={}&response_type=code&state={}&code_challenge={}&code_challenge_method=S256",
-        ACCOUNTS_BASE_URL,
+        "{}/v1/oauth/authorize?client_id={}&redirect_uri={}&response_type=code&state={}&code_challenge={}&code_challenge_method=S256&scope={}",
+        accounts_url(),
         CLIENT_ID,
         urlencoding::encode(&redirect_uri),
         state,
-        code_challenge
+        code_challenge,
+        urlencoding::encode(OAUTH_SCOPES),
     );
 
     println!("Opening browser for authentication...");
@@ -174,19 +168,6 @@ async fn login_with_oauth() -> Result<()> {
     // Get user info
     let user_email = validate_token(&tokens.access_token).await?;
 
-    // Prompt for master password
-    let master_password = if AuthState::exists() {
-        rpassword::prompt_password("Master password: ")?
-    } else {
-        println!("\nSet a master password to encrypt your credentials.");
-        let password = rpassword::prompt_password("New master password: ")?;
-        let confirm = rpassword::prompt_password("Confirm master password: ")?;
-        if password != confirm {
-            return Err(anyhow!("Passwords don't match"));
-        }
-        password
-    };
-
     // Save auth state
     let auth = AuthState {
         access_token: tokens.access_token,
@@ -195,7 +176,7 @@ async fn login_with_oauth() -> Result<()> {
         expires_at: tokens.expires_at,
         user_email: Some(user_email.clone()),
     };
-    auth.save(&master_password)?;
+    save_auth(&auth)?;
 
     println!(
         "\n{} Logged in as {}",
@@ -246,12 +227,12 @@ struct Tokens {
 async fn exchange_code(code: &str, verifier: &str, redirect_uri: &str) -> Result<Tokens> {
     let client = reqwest::Client::new();
     let resp = client
-        .post(format!("{}/v1/oauth/token", ACCOUNTS_BASE_URL))
+        .post(format!("{}/v1/oauth/token", accounts_url()))
         .form(&[
             ("grant_type", "authorization_code"),
             ("code", code),
             ("redirect_uri", redirect_uri),
-            ("client_id", "groo-cli"),
+            ("client_id", CLIENT_ID),
             ("code_verifier", verifier),
         ])
         .send()

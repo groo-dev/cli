@@ -6,7 +6,7 @@ use dialoguer::Confirm;
 use keyring::Entry;
 use uuid::Uuid;
 
-use crate::auth::storage::load_auth_with_password;
+use crate::auth::provider;
 use crate::discovery::find_project_root;
 use crate::ops::OpsConfig;
 use crate::pass::client::PassClient;
@@ -19,7 +19,7 @@ pub async fn run() -> Result<()> {
     println!("{}", style("Groo CLI Secret Migration").bold());
     println!();
     println!("This will migrate your ops private keys from macOS Keychain to Groo Pass.");
-    println!("(Note: Auth tokens are now stored locally encrypted with your master password)");
+    println!("(Note: Auth tokens are stored separately in your OS keychain)");
     println!();
 
     // Find ops keys in keychain
@@ -52,8 +52,9 @@ pub async fn run() -> Result<()> {
         return Ok(());
     }
 
-    // Check auth (prompts for master password)
-    let (auth, master_password) = load_auth_with_password()?;
+    // Check auth
+    let auth = provider::get_valid_auth().await?;
+    let master_password = rpassword::prompt_password("🔑 Master password: ")?;
 
     println!("{}", style("Unlocking vault...").dim());
 

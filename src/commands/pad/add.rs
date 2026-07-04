@@ -3,12 +3,11 @@ use console::style;
 use std::io::Read;
 use std::path::PathBuf;
 
-use crate::auth::storage::load_auth_with_password;
+use crate::auth::provider;
 use crate::pad::client::PadClient;
 
 pub async fn run(text: Option<String>, files: Vec<PathBuf>) -> Result<()> {
-    // Check auth (prompts for master password)
-    let (auth, _master_password) = load_auth_with_password()?;
+    let auth = provider::get_valid_auth().await?;
 
     // Get text from argument or stdin
     let text_content = get_text_content(text)?;

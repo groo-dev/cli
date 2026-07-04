@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
 
-use crate::auth::storage::AuthState;
+use crate::auth::storage::has_stored_auth;
 use crate::commands;
 use crate::discovery::ports::FrameworkType;
 use crate::discovery::{discover_services, discover_services_by_script, find_project_root};
@@ -294,7 +294,7 @@ pub async fn run() -> Result<()> {
     }
 
     // 8. Check auth status
-    let is_authenticated = AuthState::exists();
+    let is_authenticated = has_stored_auth();
     if !is_authenticated {
         println!(
             "{} Not authenticated (run 'groo auth login')",

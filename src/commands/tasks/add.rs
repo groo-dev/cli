@@ -2,7 +2,7 @@ use anyhow::Result;
 use console::style;
 use dialoguer::Confirm;
 
-use crate::auth::storage::load_auth_with_password;
+use crate::auth::provider;
 use crate::discovery::find_project_root;
 use crate::tasks::{CreateProjectRequest, CreateTaskError, CreateTaskRequest, TasksClient};
 
@@ -13,7 +13,7 @@ pub async fn run(
     tags: Option<Vec<String>>,
     description: Option<String>,
 ) -> Result<()> {
-    let (auth, _) = load_auth_with_password()?;
+    let auth = provider::get_valid_auth().await?;
     let client = TasksClient::new(auth.access_token);
 
     // Determine project name from arg or current directory

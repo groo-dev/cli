@@ -114,6 +114,10 @@ enum AuthCommands {
         /// Use Personal Access Token instead of browser OAuth
         #[arg(long)]
         pat: bool,
+        /// Deprecated: use the GROO_TOKEN_FILE env var instead (it must be
+        /// set for every command, not just login)
+        #[arg(long)]
+        token_file: Option<PathBuf>,
     },
     /// Show current authentication status
     Status,
@@ -337,7 +341,9 @@ async fn main() -> Result<()> {
             commands::launchpad::run(config, clean).await
         }
         Commands::Auth { command } => match command {
-            AuthCommands::Login { pat } => commands::auth::login::run(pat).await,
+            AuthCommands::Login { pat, token_file } => {
+                commands::auth::login::run(pat, token_file).await
+            }
             AuthCommands::Status => commands::auth::status::run(),
             AuthCommands::Logout => commands::auth::logout::run(),
         },

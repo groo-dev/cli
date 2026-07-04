@@ -1,18 +1,10 @@
 use anyhow::Result;
 use console::style;
 
-use crate::auth::storage::AuthState;
+use crate::auth::storage::load_auth;
 
 pub fn run() -> Result<()> {
-    if !AuthState::exists() {
-        println!("{} Not logged in", style("✗").red());
-        println!("\nRun {} to authenticate", style("groo auth login").cyan());
-        return Ok(());
-    }
-
-    let master_password = rpassword::prompt_password("🔑 Master password: ")?;
-
-    match AuthState::load(&master_password)? {
+    match load_auth()? {
         Some(auth) => {
             println!("{} Logged in", style("✓").green());
 

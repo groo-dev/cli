@@ -4,14 +4,15 @@ use dialoguer::{Confirm, FuzzySelect, Input};
 use std::collections::HashSet;
 use std::path::Path;
 
-use crate::auth::storage::load_auth_with_password;
+use crate::auth::provider;
 use crate::discovery::{discover_services, discover_services_by_script, find_project_root};
 use crate::ops::{generate_key_pair, OpsClient, OpsConfig, ServiceLink};
 use crate::pass::storage::PassStorage;
 
 /// Link a service to an ops application
 pub async fn run_link(service: Option<String>) -> Result<()> {
-    let (auth, master_password) = load_auth_with_password()?;
+    let auth = provider::get_valid_auth().await?;
+    let master_password = rpassword::prompt_password("🔑 Master password: ")?;
     let root = find_project_root()?;
 
     // Discover all services (dev, build, or lint)
@@ -158,7 +159,8 @@ pub async fn run_link(service: Option<String>) -> Result<()> {
 
 /// Unlink a service from ops
 pub async fn run_unlink(service: Option<String>) -> Result<()> {
-    let (auth, master_password) = load_auth_with_password()?;
+    let auth = provider::get_valid_auth().await?;
+    let master_password = rpassword::prompt_password("🔑 Master password: ")?;
     let root = find_project_root()?;
     let mut config = OpsConfig::load(&root)?;
 

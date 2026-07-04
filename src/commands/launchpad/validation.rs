@@ -154,14 +154,12 @@ fn validate_project(project: &super::config::ProjectConfig, errors: &mut Vec<Str
                     ));
                 }
             }
-            ProjectType::Worker => {
-                if web_features.contains(&feature_name) {
-                    errors.push(format!(
-                        "Project '{}': feature '{}' is not available on worker projects. \
-                         Move it to a web project.",
-                        project.name, feature_name
-                    ));
-                }
+            ProjectType::Worker if web_features.contains(&feature_name) => {
+                errors.push(format!(
+                    "Project '{}': feature '{}' is not available on worker projects. \
+                     Move it to a web project.",
+                    project.name, feature_name
+                ));
             }
             _ => {}
         }

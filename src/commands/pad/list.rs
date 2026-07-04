@@ -1,11 +1,10 @@
 use anyhow::Result;
 
-use crate::auth::storage::load_auth_with_password;
+use crate::auth::provider;
 use crate::pad::tui;
 
 pub async fn run() -> Result<()> {
-    // Check auth (prompts for master password)
-    let (auth, _master_password) = load_auth_with_password()?;
+    let auth = provider::get_valid_auth().await?;
 
     // Prompt for pad encryption password
     let password = rpassword::prompt_password("Pad encryption password: ")?;

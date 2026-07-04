@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::auth::storage::load_auth_with_password;
+use crate::auth::provider;
 use crate::discovery::{discover_services, discover_services_by_script, find_project_root, Service};
 use crate::ops::{decrypt_secret, encrypt_secret, ConfigType, CreateConfigRequest, OpsClient, OpsConfig};
 use crate::pass::storage::PassStorage;
@@ -386,7 +386,8 @@ pub async fn run_push(service: Option<String>, environment: String) -> Result<()
 async fn setup(
     service: Option<String>,
 ) -> Result<(OpsClient, OpsConfig, String, PathBuf, PassStorage)> {
-    let (auth, master_password) = load_auth_with_password()?;
+    let auth = provider::get_valid_auth().await?;
+    let master_password = rpassword::prompt_password("🔑 Master password: ")?;
     let root = find_project_root()?;
     let config = OpsConfig::load(&root)?;
 

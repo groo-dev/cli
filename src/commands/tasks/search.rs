@@ -1,11 +1,11 @@
 use anyhow::Result;
 use console::style;
 
-use crate::auth::storage::load_auth_with_password;
+use crate::auth::provider;
 use crate::tasks::{TaskPriority, TaskStatus, TasksClient};
 
 pub async fn run(query: String) -> Result<()> {
-    let (auth, _) = load_auth_with_password()?;
+    let auth = provider::get_valid_auth().await?;
     let client = TasksClient::new(auth.access_token);
 
     let tasks = client.search_tasks(&query).await?;
