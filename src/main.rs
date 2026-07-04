@@ -114,6 +114,10 @@ enum AuthCommands {
         /// Use Personal Access Token instead of browser OAuth
         #[arg(long)]
         pat: bool,
+        /// Use the RFC 8628 device authorization flow instead of the local
+        /// browser redirect (for headless/SSH sessions with no local browser)
+        #[arg(long)]
+        device: bool,
         /// Deprecated: use the GROO_TOKEN_FILE env var instead (it must be
         /// set for every command, not just login)
         #[arg(long)]
@@ -341,8 +345,12 @@ async fn main() -> Result<()> {
             commands::launchpad::run(config, clean).await
         }
         Commands::Auth { command } => match command {
-            AuthCommands::Login { pat, token_file } => {
-                commands::auth::login::run(pat, token_file).await
+            AuthCommands::Login {
+                pat,
+                device,
+                token_file,
+            } => {
+                commands::auth::login::run(pat, device, token_file).await
             }
             AuthCommands::Status => commands::auth::status::run(),
             AuthCommands::Logout => commands::auth::logout::run(),

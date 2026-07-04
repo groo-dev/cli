@@ -2,27 +2,12 @@
 //! refreshing the OAuth access token when it is expired or close to it.
 
 use anyhow::{bail, Context, Result};
-use serde::Deserialize;
 
 use super::storage::{clear_auth, load_auth, save_auth, AuthState};
-use super::{accounts_url, CLIENT_ID};
+use super::{accounts_url, OAuthError, TokenResponse, CLIENT_ID};
 
 /// Refresh a little before actual expiry so a token doesn't die mid-request.
 const REFRESH_SKEW_SECS: i64 = 60;
-
-#[derive(Deserialize)]
-struct TokenResponse {
-    access_token: String,
-    refresh_token: Option<String>,
-    expires_in: Option<i64>,
-}
-
-#[derive(Deserialize)]
-struct OAuthError {
-    error: String,
-    #[serde(default)]
-    error_description: Option<String>,
-}
 
 /// Returns a ready-to-use auth state, refreshing the access token first when
 /// it is expired or about to expire. PATs pass through untouched.
