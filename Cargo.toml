@@ -10,7 +10,7 @@ name = "groo"
 path = "src/main.rs"
 
 [dependencies]
-groo-cli-auth = { git = "https://github.com/groo-dev/cli-auth-rs", tag = "v0.1.1" }
+groo-cli-auth = { git = "https://github.com/groo-dev/cli-auth-rs", tag = "v0.1.2" }
 anyhow = "1.0.100"
 clap = { version = "4.5.53", features = ["derive"] }
 console = "0.16.1"
