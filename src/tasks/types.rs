@@ -132,7 +132,8 @@ pub struct SuccessResponse {
 #[serde(rename_all = "camelCase")]
 pub struct ErrorResponse {
     pub error: String,
-    pub code: String,
+    #[serde(default)]
+    pub code: Option<String>,
     pub project_name: Option<String>,
 }
 

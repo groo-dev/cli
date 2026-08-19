@@ -20,6 +20,26 @@ cargo install --git https://github.com/groo-dev/cli
 
 Run `groo` from anywhere inside your monorepo.
 
+### Sign in
+
+```bash
+groo auth login
+```
+
+The CLI opens `me.groo.dev` and signs in with OAuth authorization code + PKCE.
+No personal access token or client secret is required. Access and refresh tokens
+are stored in the operating system credential store.
+
+For SSH sessions, containers, or other environments without a local browser:
+
+```bash
+groo auth login --device
+```
+
+Use `groo auth status` to inspect the current session and `groo auth logout` to
+revoke it and remove local credentials. A working operating-system credential
+store is required; credential-storage errors stop the command and are reported.
+
 ### Start dev servers
 
 ```bash

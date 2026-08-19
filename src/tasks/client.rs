@@ -166,7 +166,11 @@ impl TasksClient {
     pub async fn search_tasks(&self, query: &str) -> Result<Vec<Task>> {
         let response = self
             .client
-            .get(format!("{}/v1/tasks/search?q={}", self.base_url, urlencoding::encode(query)))
+            .get(format!(
+                "{}/v1/tasks/search?q={}",
+                self.base_url,
+                urlencoding::encode(query)
+            ))
             .bearer_auth(&self.token)
             .send()
             .await
@@ -211,18 +215,22 @@ impl TasksClient {
             .map_err(|e| CreateTaskError::Network(e.to_string()))?;
 
         if !response.status().is_success() {
-            let error: ErrorResponse = response.json().await
+            let error: ErrorResponse = response
+                .json()
+                .await
                 .map_err(|e| CreateTaskError::Network(e.to_string()))?;
 
-            if error.code == "PROJECT_NOT_FOUND" {
+            if error.code.as_deref() == Some("PROJECT_NOT_FOUND") {
                 return Err(CreateTaskError::ProjectNotFound(
-                    error.project_name.unwrap_or_default()
+                    error.project_name.unwrap_or_default(),
                 ));
             }
             return Err(CreateTaskError::Api(error.error));
         }
 
-        let data: TaskResponse = response.json().await
+        let data: TaskResponse = response
+            .json()
+            .await
             .map_err(|e| CreateTaskError::Network(e.to_string()))?;
         Ok(data.task)
     }
@@ -333,7 +341,11 @@ impl TasksClient {
     // ==========================================================================
 
     /// Add a comment to a task
-    pub async fn add_comment(&self, task_id: &str, request: CreateCommentRequest) -> Result<Comment> {
+    pub async fn add_comment(
+        &self,
+        task_id: &str,
+        request: CreateCommentRequest,
+    ) -> Result<Comment> {
         let response = self
             .client
             .post(format!("{}/v1/tasks/{}/comments", self.base_url, task_id))

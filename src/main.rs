@@ -111,17 +111,10 @@ enum Commands {
 enum AuthCommands {
     /// Login to Groo
     Login {
-        /// Use Personal Access Token instead of browser OAuth
-        #[arg(long)]
-        pat: bool,
         /// Use the RFC 8628 device authorization flow instead of the local
         /// browser redirect (for headless/SSH sessions with no local browser)
         #[arg(long)]
         device: bool,
-        /// Deprecated: use the GROO_TOKEN_FILE env var instead (it must be
-        /// set for every command, not just login)
-        #[arg(long)]
-        token_file: Option<PathBuf>,
     },
     /// Show current authentication status
     Status,
@@ -341,17 +334,9 @@ async fn main() -> Result<()> {
         Commands::Open { service } => commands::open::run(&service),
         Commands::Stop { project } => commands::stop::run(project),
         Commands::Doctor => commands::doctor::run().await,
-        Commands::Launchpad { config, clean } => {
-            commands::launchpad::run(config, clean).await
-        }
+        Commands::Launchpad { config, clean } => commands::launchpad::run(config, clean).await,
         Commands::Auth { command } => match command {
-            AuthCommands::Login {
-                pat,
-                device,
-                token_file,
-            } => {
-                commands::auth::login::run(pat, device, token_file).await
-            }
+            AuthCommands::Login { device } => commands::auth::login::run(device).await,
             AuthCommands::Status => commands::auth::status::run(),
             AuthCommands::Logout => commands::auth::logout::run().await,
         },
