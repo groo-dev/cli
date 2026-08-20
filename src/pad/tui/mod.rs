@@ -19,9 +19,9 @@ use crate::pad::crypto::decrypt;
 use crate::pad::types::UserState;
 
 /// Run the TUI for viewing and managing pad items
-pub async fn run(token: String, password: &str) -> Result<()> {
+pub async fn run(password: &str) -> Result<()> {
     // Connect and get initial state
-    let client = PadClient::new(token.clone());
+    let client = PadClient::with_groo_auth();
     let (state, key) = client.connect_and_sync(password).await?;
 
     // Decrypt all items
@@ -35,7 +35,7 @@ pub async fn run(token: String, password: &str) -> Result<()> {
     let mut terminal = Terminal::new(backend)?;
 
     // Create app state
-    let mut app = App::new(items, key, token);
+    let mut app = App::new(items, key);
 
     // Main loop
     let result = run_app(&mut terminal, &mut app, &client).await;

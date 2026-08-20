@@ -13,12 +13,30 @@ const PAD_WS_URL: &str = "wss://pad.groo.dev/v1/ws";
 const PAD_API_URL: &str = "https://pad.groo.dev/v1";
 
 pub struct PadClient {
-    token: String,
+    token: Option<String>,
 }
 
 impl PadClient {
     pub fn new(token: String) -> Self {
-        Self { token }
+        Self { token: Some(token) }
+    }
+
+    /// Use the shared OAuth session and obtain a fresh token before every new
+    /// HTTP or WebSocket connection. This is required by long-running TUIs,
+    /// which may reconnect after the original access token has expired.
+    pub fn with_groo_auth() -> Self {
+        Self { token: None }
+    }
+
+    async fn access_token(&self) -> Result<String> {
+        match &self.token {
+            Some(token) => Ok(token.clone()),
+            None => Ok(crate::auth::client()?
+                .access_token()
+                .await?
+                .expose_secret()
+                .to_owned()),
+        }
     }
 
     pub async fn add_list_item(
@@ -28,9 +46,10 @@ impl PadClient {
         password: &str,
     ) -> Result<()> {
         // Connect to WebSocket
+        let token = self.access_token().await?;
         let request = http::Request::builder()
             .uri(PAD_WS_URL)
-            .header("Authorization", format!("Bearer {}", self.token))
+            .header("Authorization", format!("Bearer {token}"))
             .header("Host", "pad.groo.dev")
             .header("Upgrade", "websocket")
             .header("Connection", "Upgrade")
@@ -135,9 +154,10 @@ impl PadClient {
                 .mime_str("application/octet-stream")?,
         );
 
+        let token = self.access_token().await?;
         let resp = client
             .post(format!("{}/files", PAD_API_URL))
-            .bearer_auth(&self.token)
+            .bearer_auth(token)
             .multipart(form)
             .send()
             .await?;
@@ -170,9 +190,10 @@ impl PadClient {
 
     /// Connect to WebSocket, get initial state, and derive encryption key
     pub async fn connect_and_sync(&self, password: &str) -> Result<(UserState, [u8; 32])> {
+        let token = self.access_token().await?;
         let request = http::Request::builder()
             .uri(PAD_WS_URL)
-            .header("Authorization", format!("Bearer {}", self.token))
+            .header("Authorization", format!("Bearer {token}"))
             .header("Host", "pad.groo.dev")
             .header("Upgrade", "websocket")
             .header("Connection", "Upgrade")
@@ -217,9 +238,10 @@ impl PadClient {
 
     /// Fetch current state without password verification (for refresh when key is already known)
     pub async fn fetch_state(&self) -> Result<UserState> {
+        let token = self.access_token().await?;
         let request = http::Request::builder()
             .uri(PAD_WS_URL)
-            .header("Authorization", format!("Bearer {}", self.token))
+            .header("Authorization", format!("Bearer {token}"))
             .header("Host", "pad.groo.dev")
             .header("Upgrade", "websocket")
             .header("Connection", "Upgrade")
@@ -252,9 +274,10 @@ impl PadClient {
     /// Download and decrypt a file from R2 storage
     pub async fn download_file(&self, r2_key: &str, key: &[u8; 32]) -> Result<Vec<u8>> {
         let client = reqwest::Client::new();
+        let token = self.access_token().await?;
         let resp = client
             .get(format!("{}/files/{}", PAD_API_URL, r2_key))
-            .bearer_auth(&self.token)
+            .bearer_auth(token)
             .send()
             .await?;
 

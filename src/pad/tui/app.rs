@@ -113,7 +113,6 @@ pub struct App {
     pub items: Vec<DecryptedItem>,
     pub selected: usize,
     pub key: [u8; 32],
-    pub token: String,
     pub should_quit: bool,
     pub status_message: Option<(String, StatusType, Instant)>,
     pub mode: AppMode,
@@ -121,12 +120,11 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(items: Vec<DecryptedItem>, key: [u8; 32], token: String) -> Self {
+    pub fn new(items: Vec<DecryptedItem>, key: [u8; 32]) -> Self {
         Self {
             items,
             selected: 0,
             key,
-            token,
             should_quit: false,
             status_message: None,
             mode: AppMode::Normal,
