@@ -23,8 +23,8 @@ pub struct PassStorage {
 
 impl PassStorage {
     /// Unlock pass vault with master password
-    pub async fn unlock(token: &str, master_password: &str) -> Result<Self> {
-        let client = PassClient::new(token.to_string());
+    pub async fn unlock(master_password: &str) -> Result<Self> {
+        let client = PassClient::new();
         let (vault, key, version) = client.unlock(master_password).await?;
         Ok(Self {
             client,
@@ -75,9 +75,9 @@ impl PassStorage {
         let now = now_timestamp();
 
         // Find existing note
-        let existing_idx = self.vault.items.iter().position(|item| {
-            matches!(item, VaultItem::Note(n) if n.name == name && n.deleted_at.is_none())
-        });
+        let existing_idx = self.vault.items.iter().position(
+            |item| matches!(item, VaultItem::Note(n) if n.name == name && n.deleted_at.is_none()),
+        );
 
         if let Some(idx) = existing_idx {
             // Update existing
@@ -100,7 +100,10 @@ impl PassStorage {
             self.vault.items.push(VaultItem::Note(note));
         }
 
-        self.sync().await
+        let item = &self.vault.items[existing_idx.unwrap_or(self.vault.items.len() - 1)];
+        let resp = self.client.save_item(item, &self.key).await?;
+        self.version = self.version.max(resp.seq);
+        Ok(())
     }
 
     /// Soft-delete note (set deleted_at), then sync to server
@@ -110,24 +113,24 @@ impl PassStorage {
         // Find and soft-delete
         for item in &mut self.vault.items {
             if let VaultItem::Note(note) = item
-                && note.name == name && note.deleted_at.is_none() {
-                    note.deleted_at = Some(now);
-                    note.updated_at = now;
-                    break;
-                }
+                && note.name == name
+                && note.deleted_at.is_none()
+            {
+                note.deleted_at = Some(now);
+                note.updated_at = now;
+                break;
+            }
         }
 
-        self.sync().await
-    }
-
-    /// Sync vault to server
-    async fn sync(&mut self) -> Result<()> {
-        self.vault.last_modified = now_timestamp();
-        let resp = self
-            .client
-            .update_vault(&self.vault, &self.key, self.version)
-            .await?;
-        self.version = resp.version;
+        if let Some(item) = self
+            .vault
+            .items
+            .iter()
+            .find(|item| matches!(item, VaultItem::Note(n) if n.name == name))
+        {
+            let resp = self.client.save_item(item, &self.key).await?;
+            self.version = self.version.max(resp.seq);
+        }
         Ok(())
     }
 }

@@ -9,15 +9,51 @@ use serde::{Deserialize, Serialize};
 pub struct KeyInfoResponse {
     pub key_salt: String,
     pub kdf_iterations: u32,
+    pub wrapped_vault_key: String,
+    pub wrap_iv: String,
+    pub format_version: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct VaultResponse {
+pub struct ServerRecord {
+    pub id: String,
+    pub encrypted_data: Option<String>,
+    pub iv: Option<String>,
+    pub wrapped_record_key: Option<String>,
+    pub wrap_iv: Option<String>,
+    pub version: u32,
+    pub seq: u32,
+    pub is_deleted: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecordsResponse {
+    pub records: Vec<ServerRecord>,
+    pub next_seq: u32,
+    pub has_more: bool,
+    pub format_version: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecordWriteRequest {
+    pub id: String,
     pub encrypted_data: String,
     pub iv: String,
+    pub wrapped_record_key: String,
+    pub wrap_iv: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expected_version: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecordWriteResponse {
+    pub id: String,
+    pub seq: u32,
     pub version: u32,
-    pub updated_at: i64,
 }
 
 #[allow(dead_code)]

@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use console::style;
 use dialoguer::{Confirm, FuzzySelect};
 use std::collections::HashMap;
@@ -6,8 +6,12 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::auth::provider;
-use crate::discovery::{discover_services, discover_services_by_script, find_project_root, Service};
-use crate::ops::{decrypt_secret, encrypt_secret, ConfigType, CreateConfigRequest, OpsClient, OpsConfig};
+use crate::discovery::{
+    Service, discover_services, discover_services_by_script, find_project_root,
+};
+use crate::ops::{
+    ConfigType, CreateConfigRequest, OpsClient, OpsConfig, decrypt_secret, encrypt_secret,
+};
 use crate::pass::storage::PassStorage;
 
 /// List env vars and secrets for a linked service
@@ -18,7 +22,9 @@ pub async fn run_list(service: Option<String>, environment: String) -> Result<()
         .get_service(&service_name)
         .ok_or_else(|| anyhow!("Service '{}' is not linked", service_name))?;
 
-    let resp = client.get_config(&link.application_id, &environment).await?;
+    let resp = client
+        .get_config(&link.application_id, &environment)
+        .await?;
 
     println!(
         "\n{} {} ({} environment)\n",
@@ -81,7 +87,9 @@ pub async fn run_diff(service: Option<String>, environment: String) -> Result<()
     let local = parse_env_file(&env_file).unwrap_or_default();
 
     // Get remote config
-    let resp = client.get_config(&link.application_id, &environment).await?;
+    let resp = client
+        .get_config(&link.application_id, &environment)
+        .await?;
     let private_key = storage.get_ops_key(&link.application_id);
 
     // Build remote map
@@ -132,7 +140,12 @@ pub async fn run_diff(service: Option<String>, environment: String) -> Result<()
             }
             (Some(lv), None) => {
                 has_diff = true;
-                println!("{} {} {}", style("-").red(), key, style("(local only)").dim());
+                println!(
+                    "{} {} {}",
+                    style("-").red(),
+                    key,
+                    style("(local only)").dim()
+                );
                 println!("  {}", lv);
             }
             (None, Some((rv, is_secret))) => {
@@ -177,7 +190,9 @@ pub async fn run_pull(service: Option<String>, environment: String) -> Result<()
     let env_file = detect_env_file(&service_info.path);
 
     // Get remote config
-    let resp = client.get_config(&link.application_id, &environment).await?;
+    let resp = client
+        .get_config(&link.application_id, &environment)
+        .await?;
     let private_key = storage.get_ops_key(&link.application_id);
 
     // Build env file content
@@ -264,7 +279,9 @@ pub async fn run_push(service: Option<String>, environment: String) -> Result<()
     }
 
     // Get remote config to compare
-    let resp = client.get_config(&link.application_id, &environment).await?;
+    let resp = client
+        .get_config(&link.application_id, &environment)
+        .await?;
 
     let mut remote_vars: HashMap<String, String> = HashMap::new();
     let mut remote_secrets: HashMap<String, String> = HashMap::new();
@@ -334,7 +351,15 @@ pub async fn run_push(service: Option<String>, environment: String) -> Result<()
             // New entry - ask if it's a secret
             let is_secret = prompt_is_secret(name)?;
 
-            print!("  Creating {} {}... ", style(name).cyan(), if is_secret { style("[secret]").magenta() } else { style("[var]").green() });
+            print!(
+                "  Creating {} {}... ",
+                style(name).cyan(),
+                if is_secret {
+                    style("[secret]").magenta()
+                } else {
+                    style("[var]").green()
+                }
+            );
 
             let final_value = if is_secret {
                 if let Some(pk) = public_key {
@@ -392,9 +417,7 @@ async fn setup(
     let config = OpsConfig::load(&root)?;
 
     if config.services.is_empty() {
-        return Err(anyhow!(
-            "No services linked. Run 'groo ops link' first."
-        ));
+        return Err(anyhow!("No services linked. Run 'groo ops link' first."));
     }
 
     // Select service
@@ -405,9 +428,7 @@ async fn setup(
             }
             name
         }
-        None if config.services.len() == 1 => {
-            config.services.keys().next().unwrap().clone()
-        }
+        None if config.services.len() == 1 => config.services.keys().next().unwrap().clone(),
         None => {
             let names: Vec<&str> = config.services.keys().map(|s| s.as_str()).collect();
             let selection = FuzzySelect::new()
@@ -422,7 +443,7 @@ async fn setup(
 
     // Unlock pass vault for key access
     println!("{}", style("Unlocking vault...").dim());
-    let storage = PassStorage::unlock(&auth.access_token, &master_password).await?;
+    let storage = PassStorage::unlock(&master_password).await?;
 
     Ok((client, config, service_name, root, storage))
 }

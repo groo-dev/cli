@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use console::style;
 
 use crate::auth::provider;
@@ -8,11 +8,11 @@ use crate::pass::types::VaultItem;
 
 pub async fn run(query: &str, username: bool, copy_totp: bool, show: bool) -> Result<()> {
     // Check auth
-    let auth = provider::get_valid_auth().await?;
+    provider::get_valid_auth().await?;
     let master_password = rpassword::prompt_password("🔑 Master password: ")?;
 
     // Create client and unlock vault
-    let client = PassClient::new(auth.access_token);
+    let client = PassClient::new();
     let (vault, _key, _version) = client.unlock(&master_password).await?;
 
     // Search for matching items (case-insensitive)
@@ -181,7 +181,8 @@ pub async fn run(query: &str, username: bool, copy_totp: bool, show: bool) -> Re
 fn copy_to_clipboard(text: &str) -> Result<()> {
     use arboard::Clipboard;
 
-    let mut clipboard = Clipboard::new().map_err(|e| anyhow!("Failed to access clipboard: {}", e))?;
+    let mut clipboard =
+        Clipboard::new().map_err(|e| anyhow!("Failed to access clipboard: {}", e))?;
     clipboard
         .set_text(text)
         .map_err(|e| anyhow!("Failed to copy to clipboard: {}", e))?;

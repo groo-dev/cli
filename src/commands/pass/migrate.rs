@@ -26,7 +26,10 @@ pub async fn run() -> Result<()> {
     let ops_keys = find_ops_keys();
 
     if ops_keys.is_empty() {
-        println!("{} No ops keys found in keychain to migrate.", style("!").yellow());
+        println!(
+            "{} No ops keys found in keychain to migrate.",
+            style("!").yellow()
+        );
         return Ok(());
     }
 
@@ -53,14 +56,14 @@ pub async fn run() -> Result<()> {
     }
 
     // Check auth
-    let auth = provider::get_valid_auth().await?;
+    provider::get_valid_auth().await?;
     let master_password = rpassword::prompt_password("🔑 Master password: ")?;
 
     println!("{}", style("Unlocking vault...").dim());
 
     // Unlock pass vault
-    let client = PassClient::new(auth.access_token.clone());
-    let (mut vault, key, version) = client.unlock(&master_password).await?;
+    let client = PassClient::new();
+    let (mut vault, key, _version) = client.unlock(&master_password).await?;
 
     let mut migrated_count = 0;
 
@@ -98,7 +101,9 @@ pub async fn run() -> Result<()> {
     // Save vault
     vault.last_modified = now_timestamp();
     println!("{}", style("Saving to vault...").dim());
-    client.update_vault(&vault, &key, version).await?;
+    for item in vault.items.iter().rev().take(migrated_count) {
+        client.save_item(item, &key).await?;
+    }
 
     println!(
         "\n{} Migrated {} secret(s) to Groo Pass",
@@ -154,17 +159,18 @@ fn find_ops_keys() -> Vec<(String, String)> {
 
     // Try to find project root and load ops config
     if let Ok(root) = find_project_root()
-        && let Ok(config) = OpsConfig::load(&root) {
-            for link in config.services.values() {
-                // Check if key exists in keychain
-                if Entry::new(SERVICE_NAME, &format!("ops-{}", link.application_id))
-                    .and_then(|e| e.get_password())
-                    .is_ok()
-                {
-                    keys.push((link.application_id.clone(), link.application_name.clone()));
-                }
+        && let Ok(config) = OpsConfig::load(&root)
+    {
+        for link in config.services.values() {
+            // Check if key exists in keychain
+            if Entry::new(SERVICE_NAME, &format!("ops-{}", link.application_id))
+                .and_then(|e| e.get_password())
+                .is_ok()
+            {
+                keys.push((link.application_id.clone(), link.application_name.clone()));
             }
         }
+    }
 
     // Deduplicate by app_id
     keys.sort_by(|a, b| a.0.cmp(&b.0));

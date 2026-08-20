@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use console::style;
 use dialoguer::{Confirm, FuzzySelect, Input};
 use std::collections::HashSet;
@@ -6,7 +6,7 @@ use std::path::Path;
 
 use crate::auth::provider;
 use crate::discovery::{discover_services, discover_services_by_script, find_project_root};
-use crate::ops::{generate_key_pair, OpsClient, OpsConfig, ServiceLink};
+use crate::ops::{OpsClient, OpsConfig, ServiceLink, generate_key_pair};
 use crate::pass::storage::PassStorage;
 
 /// Link a service to an ops application
@@ -143,7 +143,7 @@ pub async fn run_link(service: Option<String>) -> Result<()> {
     // Store private key in pass vault
     if let Some(private_key) = key_pair.1 {
         println!("{}", style("Storing private key in vault...").dim());
-        let mut storage = PassStorage::unlock(&auth.access_token, &master_password).await?;
+        let mut storage = PassStorage::unlock(&master_password).await?;
         storage.set_ops_key(&app.id, &private_key).await?;
     }
 
@@ -159,7 +159,7 @@ pub async fn run_link(service: Option<String>) -> Result<()> {
 
 /// Unlink a service from ops
 pub async fn run_unlink(service: Option<String>) -> Result<()> {
-    let auth = provider::get_valid_auth().await?;
+    provider::get_valid_auth().await?;
     let master_password = rpassword::prompt_password("🔑 Master password: ")?;
     let root = find_project_root()?;
     let mut config = OpsConfig::load(&root)?;
@@ -207,7 +207,7 @@ pub async fn run_unlink(service: Option<String>) -> Result<()> {
     config.save(&root)?;
 
     // Optionally remove private key from vault
-    let storage = PassStorage::unlock(&auth.access_token, &master_password).await?;
+    let storage = PassStorage::unlock(&master_password).await?;
     if storage.has_ops_key(&link.application_id) {
         let remove_key = Confirm::new()
             .with_prompt("Remove private key from vault?")
@@ -247,7 +247,7 @@ fn import_private_key(_app_id: &str) -> Result<(Option<String>, Option<String>)>
     let private_key = private_key.trim().to_string();
 
     // Validate it's valid base64
-    use base64::{engine::general_purpose::STANDARD, Engine};
+    use base64::{Engine, engine::general_purpose::STANDARD};
     STANDARD
         .decode(&private_key)
         .context("Invalid base64 encoding")?;

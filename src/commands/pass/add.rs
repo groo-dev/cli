@@ -1,6 +1,6 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use console::style;
 use dialoguer::{Confirm, Input, Password, Select};
 use rand::Rng;
@@ -9,8 +9,8 @@ use uuid::Uuid;
 use crate::auth::provider;
 use crate::pass::client::PassClient;
 use crate::pass::types::{
-    BankAccountItem, BankAccountType, CardItem, NoteItem, PasswordItem, TotpAlgorithm,
-    TotpConfig, VaultItem,
+    BankAccountItem, BankAccountType, CardItem, NoteItem, PasswordItem, TotpAlgorithm, TotpConfig,
+    VaultItem,
 };
 
 const UPPERCASE: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -20,7 +20,7 @@ const SYMBOLS: &str = "!@#$%^&*()_+-=[]{}|;:,.<>?";
 
 pub async fn run() -> Result<()> {
     // Check auth
-    let auth = provider::get_valid_auth().await?;
+    provider::get_valid_auth().await?;
     let master_password = rpassword::prompt_password("🔑 Master password: ")?;
 
     // Select item type
@@ -34,8 +34,8 @@ pub async fn run() -> Result<()> {
     println!("{}", style("Unlocking vault...").dim());
 
     // Unlock vault
-    let client = PassClient::new(auth.access_token);
-    let (mut vault, key, version) = client.unlock(&master_password).await?;
+    let client = PassClient::new();
+    let (mut vault, key, _version) = client.unlock(&master_password).await?;
 
     // Create item based on type
     let item = match selection {
@@ -55,7 +55,11 @@ pub async fn run() -> Result<()> {
 
     // Sync to server
     println!("{}", style("Saving to vault...").dim());
-    client.update_vault(&vault, &key, version).await?;
+    let item = vault
+        .items
+        .last()
+        .ok_or_else(|| anyhow!("New Pass item disappeared before save"))?;
+    client.save_item(item, &key).await?;
 
     println!(
         "{} {} {} added to vault",
@@ -70,9 +74,7 @@ pub async fn run() -> Result<()> {
 fn create_password_item() -> Result<VaultItem> {
     println!("\n{}", style("New Password").bold());
 
-    let name: String = Input::new()
-        .with_prompt("Name")
-        .interact_text()?;
+    let name: String = Input::new().with_prompt("Name").interact_text()?;
 
     let username: String = Input::new()
         .with_prompt("Username/Email")
@@ -87,11 +89,7 @@ fn create_password_item() -> Result<VaultItem> {
         .allow_empty(true)
         .interact_text()?;
 
-    let urls = if url.is_empty() {
-        vec![]
-    } else {
-        vec![url]
-    };
+    let urls = if url.is_empty() { vec![] } else { vec![url] };
 
     let notes: String = Input::new()
         .with_prompt("Notes (optional)")
@@ -130,11 +128,12 @@ fn create_password_item() -> Result<VaultItem> {
 fn create_note_item() -> Result<VaultItem> {
     println!("\n{}", style("New Secure Note").bold());
 
-    let name: String = Input::new()
-        .with_prompt("Name")
-        .interact_text()?;
+    let name: String = Input::new().with_prompt("Name").interact_text()?;
 
-    println!("{}", style("Enter note content (press Enter twice to finish):").dim());
+    println!(
+        "{}",
+        style("Enter note content (press Enter twice to finish):").dim()
+    );
 
     let mut content = String::new();
     let mut empty_count = 0;
@@ -207,27 +206,21 @@ fn create_card_item() -> Result<VaultItem> {
 
     let exp_month: String = Input::new()
         .with_prompt("Expiry month (MM)")
-        .validate_with(|input: &String| {
-            match input.parse::<u8>() {
-                Ok(m) if (1..=12).contains(&m) => Ok(()),
-                _ => Err("Month must be 01-12"),
-            }
+        .validate_with(|input: &String| match input.parse::<u8>() {
+            Ok(m) if (1..=12).contains(&m) => Ok(()),
+            _ => Err("Month must be 01-12"),
         })
         .interact_text()?;
 
     let exp_year: String = Input::new()
         .with_prompt("Expiry year (YY or YYYY)")
-        .validate_with(|input: &String| {
-            match input.parse::<u16>() {
-                Ok(y) if (24..=99).contains(&y) || (2024..=2099).contains(&y) => Ok(()),
-                _ => Err("Year must be valid (e.g., 25 or 2025)"),
-            }
+        .validate_with(|input: &String| match input.parse::<u16>() {
+            Ok(y) if (24..=99).contains(&y) || (2024..=2099).contains(&y) => Ok(()),
+            _ => Err("Year must be valid (e.g., 25 or 2025)"),
         })
         .interact_text()?;
 
-    let cvv: String = Password::new()
-        .with_prompt("CVV")
-        .interact()?;
+    let cvv: String = Password::new().with_prompt("CVV").interact()?;
 
     let notes: String = Input::new()
         .with_prompt("Notes (optional)")
@@ -265,9 +258,7 @@ fn create_bank_account_item() -> Result<VaultItem> {
         .with_prompt("Name (e.g., 'Main Checking')")
         .interact_text()?;
 
-    let bank_name: String = Input::new()
-        .with_prompt("Bank name")
-        .interact_text()?;
+    let bank_name: String = Input::new().with_prompt("Bank name").interact_text()?;
 
     let account_types = vec!["Checking", "Savings", "Other"];
     let type_idx = Select::new()
@@ -282,9 +273,7 @@ fn create_bank_account_item() -> Result<VaultItem> {
         _ => BankAccountType::Other,
     };
 
-    let account_number: String = Input::new()
-        .with_prompt("Account number")
-        .interact_text()?;
+    let account_number: String = Input::new().with_prompt("Account number").interact_text()?;
 
     let routing_number: String = Input::new()
         .with_prompt("Routing number (optional)")
