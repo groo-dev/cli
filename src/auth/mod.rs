@@ -10,7 +10,7 @@ const ACCOUNTS_URL: &str = "https://me.groo.dev";
 // bundle id, not from the id presented
 // (runtime/api/src/services/application-set.service.ts).
 //
-// The previous value, app_54d1a63040d472d0cce73ac8cb2d61a3, belonged to the
+// The previous value, app_0981a308b3bef831baafe2f91147624b, belonged to the
 // catch-all `Groo` application, DELETED on 2026-08-22 because it was the
 // entitlement unit for all seven products. It took `Groo CLI` with it and left
 // `groo auth login` failing with `unknown client_id`.
@@ -21,7 +21,7 @@ const ACCOUNTS_URL: &str = "https://me.groo.dev";
 // /authorize only. Since OAUTH_SCOPES below spans four applications and is also
 // passed as `required_scopes`, the device flow cannot satisfy it whichever
 // sibling id is used here. The default browser/loopback login is unaffected.
-const CLIENT_ID: &str = "client_5e13bc0b74b0ffa4c7a8b8790b6e13e5";
+const CLIENT_ID: &str = "app_0981a308b3bef831baafe2f91147624b";
 const OAUTH_SCOPES: &[&str] = &[
     "openid",
     "profile",
